@@ -7,9 +7,10 @@ from Utils.ExceptionHandler import global_exception_handler
 from Controllers.authController import auth_router
 from Controllers.courseController import course_router
 from Controllers.courseModuleController import course_module_router
-from Controllers.videoController import video_router
+from Controllers.utilController import util_router
+from Controllers.categoryController import category_router
 
-app = FastAPI(title="ZapLearn API", description="API for ZapLearn Learning Platform", version="1.0.0")
+app = FastAPI(title="Vidyaroop API", description="API for Vidyaroop Learning Platform", version="1.0.0")
 
 # Enable CORS
 app.add_middleware(
@@ -24,7 +25,8 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(course_router, prefix="/course", tags=["Course"])
 app.include_router(course_module_router, prefix="/courseModule", tags=["CourseModule"])
-app.include_router(video_router, prefix="/media", tags=["Video"])
+app.include_router(util_router, prefix="/media", tags=["Video"])
+app.include_router(category_router, prefix="/category", tags=["Category"])
 
 # Register the global exception handler
 app.add_exception_handler(Exception, global_exception_handler)

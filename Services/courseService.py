@@ -10,10 +10,9 @@ def create_course(course_data: CourseRequest, user_id: int) -> CourseResponse:
     """
     query = """
         INSERT INTO CourseMaster (
-            CourseName, CourseDescription, VideoPath, 
-            ActualPrice, DiscountedPrice, DiscountPercentage, 
-            IsPublic, CreatedBy, Status
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            CategoryId,CourseName, CourseDescription, CourseInfo, CourseLanguage, BannerImage, Author, Rating,
+            ActualPrice, DiscountedPrice, IsPremium, IsBestSeller, VideoPath, IsPublic, CreatedBy, Status
+        ) VALUES (%s,%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     connection = get_db_connection()
     cursor = None
@@ -23,12 +22,19 @@ def create_course(course_data: CourseRequest, user_id: int) -> CourseResponse:
             cursor.execute(
                 query,
                 (
+                    course_data.category_id,  
                     course_data.course_name,
                     course_data.course_description,
-                    course_data.video_path,
+                    course_data.course_info,
+                    course_data.course_language,
+                    course_data.banner_image,
+                    course_data.author,
+                    course_data.rating,
                     course_data.actual_price,
                     course_data.discounted_price,
-                    course_data.discount_percentage,
+                    course_data.is_premium,
+                    course_data.is_best_seller,
+                    course_data.video_path,
                     course_data.is_public,
                     user_id,
                     "Active",  # Default status
@@ -42,12 +48,19 @@ def create_course(course_data: CourseRequest, user_id: int) -> CourseResponse:
             # Return the full course response
             return CourseResponse(
                 course_id=course_id,
+                category_id=course_data.category_id,
                 course_name=course_data.course_name,
                 course_description=course_data.course_description,
-                video_path=course_data.video_path,
+                course_info=course_data.course_info,
+                course_language=course_data.course_language,
+                banner_image=course_data.banner_image,
+                author=course_data.author,
+                rating=course_data.rating,
                 actual_price=course_data.actual_price,
                 discounted_price=course_data.discounted_price,
-                discount_percentage=course_data.discount_percentage,
+                is_premium=course_data.is_premium,
+                is_best_seller=course_data.is_best_seller,
+                video_path=course_data.video_path,
                 is_public=course_data.is_public,
                 created_by=str(user_id),  # Convert user_id to string
                 status="Active",
@@ -77,12 +90,19 @@ def get_course_by_id(course_id: int) -> CourseResponse:
                 raise Exception("Course not found")
             return CourseResponse(
                 course_id=course["CourseId"],
+                category_id=course["CategoryId"],
                 course_name=course["CourseName"],
                 course_description=course["CourseDescription"],
-                video_path=course["VideoPath"],
+                course_info=course["CourseInfo"],
+                course_language=course["CourseLanguage"],
+                banner_image=course["BannerImage"],
+                author=course["Author"],
+                rating=course["Rating"],
                 actual_price=course["ActualPrice"],
                 discounted_price=course["DiscountedPrice"],
-                discount_percentage=course["DiscountPercentage"],
+                is_premium=course["IsPremium"],
+                is_best_seller=course["IsBestSeller"],
+                video_path=course["VideoPath"],
                 is_public=course["IsPublic"],
                 created_by=course["CreatedBy"],
                 status=course["Status"],
@@ -102,12 +122,19 @@ def update_course(course_id: int, course_data: CourseUpdateRequest, updated_by: 
     """
     query = """
         UPDATE CourseMaster
-        SET CourseName = %s,
+        SET CategoryId=%s,
+            CourseName = %s,
             CourseDescription = %s,
-            VideoPath = %s,
+            CourseInfo = %s,
+            CourseLanguage = %s,
+            BannerImage = %s,
+            Author = %s,
+            Rating = %s,
             ActualPrice = %s,
             DiscountedPrice = %s,
-            DiscountPercentage = %s,
+            IsPremium = %s,
+            IsBestSeller = %s,
+            VideoPath = %s,
             IsPublic = %s,
             UpdatedBy = %s,
             UpdatedAt = NOW(),
@@ -122,12 +149,19 @@ def update_course(course_id: int, course_data: CourseUpdateRequest, updated_by: 
             cursor.execute(
                 query,
                 (
+                    course_data.category_id, 
                     course_data.course_name,
                     course_data.course_description,
-                    course_data.video_path,
+                    course_data.course_info,
+                    course_data.course_language,
+                    course_data.banner_image,
+                    course_data.author,
+                    course_data.rating,
                     course_data.actual_price,
                     course_data.discounted_price,
-                    course_data.discount_percentage,
+                    course_data.is_premium,
+                    course_data.is_best_seller,
+                    course_data.video_path,
                     course_data.is_public,
                     updated_by,  # Use the updated_by parameter
                     "Active",  # Default status
@@ -171,7 +205,7 @@ def get_all_courses() -> list[CourseResponse]:
     """
     Retrieve all courses using an inline query.
     """
-    query = "SELECT * FROM CourseMaster"
+    query = "SELECT * FROM CourseMaster where Status = 'Active' ORDER BY CourseId DESC"
     connection = get_db_connection()
     cursor = None
     if connection:
@@ -184,12 +218,19 @@ def get_all_courses() -> list[CourseResponse]:
             return [
                 CourseResponse(
                     course_id=course["CourseId"],
+                    category_id=course["CategoryId"],
                     course_name=course["CourseName"],
                     course_description=course["CourseDescription"],
-                    video_path=course["VideoPath"],
+                    course_info=course["CourseInfo"],
+                    course_language=course["CourseLanguage"],
+                    banner_image=course["BannerImage"],
+                    author=course["Author"],
+                    rating=course["Rating"],
                     actual_price=course["ActualPrice"],
                     discounted_price=course["DiscountedPrice"],
-                    discount_percentage=course["DiscountPercentage"],
+                    is_premium=course["IsPremium"],
+                    is_best_seller=course["IsBestSeller"],
+                    video_path=course["VideoPath"],
                     is_public=course["IsPublic"],
                     created_by=course["CreatedBy"],
                     status=course["Status"],

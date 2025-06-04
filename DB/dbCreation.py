@@ -85,12 +85,19 @@ def create_course_master_table():
     table_query = """
     CREATE TABLE IF NOT EXISTS CourseMaster (
         CourseId INT AUTO_INCREMENT PRIMARY KEY,
+        CategoryId INT NOT NULL,
         CourseName VARCHAR(255) NOT NULL,
         CourseDescription TEXT,
-        VideoPath VARCHAR(500),
+        CourseInfo TEXT,
+        CourseLanguage VARCHAR(100),
+        BannerImage VARCHAR(500),
+        Author VARCHAR(255),
+        Rating DECIMAL(3,2) DEFAULT 0.00,
         ActualPrice DECIMAL(10,2) DEFAULT 0.00,
         DiscountedPrice DECIMAL(10,2) DEFAULT 0.00,
-        DiscountPercentage DECIMAL(5,2) DEFAULT 0.00,
+        IsPremium BOOLEAN DEFAULT FALSE,
+        IsBestSeller BOOLEAN DEFAULT FALSE,
+        VideoPath VARCHAR(500),
         IsPublic BOOLEAN DEFAULT FALSE,
         CreatedBy VARCHAR(255),
         CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -100,6 +107,21 @@ def create_course_master_table():
     );
     """
     execute_query(table_query, "Table 'CourseMaster' ensured to exist.")
+
+def create_category_master_table():
+    """Create the CategoryMaster table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS CategoryMaster (
+        CategoryId INT AUTO_INCREMENT PRIMARY KEY,
+        CategoryName VARCHAR(255) NOT NULL,        
+        CreatedBy VARCHAR(255),
+        CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UpdatedBy VARCHAR(255),
+        UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        Status VARCHAR(50) DEFAULT 'Active'
+    );
+    """
+    execute_query(table_query, "Table 'CategoryMaster' ensured to exist.")
 
 def create_course_module_table():
     """Create the CourseModule table if it does not exist."""
@@ -347,6 +369,23 @@ def insert_default_data():
     for query in default_data_queries:
         execute_query(query, "Default data inserted.")
 
+def insert_category_master_defaults():
+    """Insert default categories into the CategoryMaster table."""
+    category_insert_query = """
+    INSERT INTO CategoryMaster (CategoryName, CreatedBy, CreatedAt, UpdatedBy, UpdatedAt, Status) VALUES
+        ('Development','1','2025-06-02 20:16:05',NULL,'2025-06-02 20:16:05','Active'),
+        ('Buisness','1','2025-06-02 20:16:09',NULL,'2025-06-02 20:16:09','Active'),
+        ('Finance & Accounting','1','2025-06-02 20:16:19','1','2025-06-02 20:17:48','Active'),
+        ('IT & Software','1','2025-06-02 20:16:32',NULL,'2025-06-02 20:16:32','Active'),
+        ('Office Productivity','1','2025-06-02 20:16:41',NULL,'2025-06-02 20:16:41','Active'),
+        ('Personal Development','1','2025-06-02 20:16:53',NULL,'2025-06-02 20:16:53','Active'),
+        ('Design','1','2025-06-02 20:17:03',NULL,'2025-06-02 20:17:03','Active'),
+        ('Marketing','1','2025-06-02 20:17:12',NULL,'2025-06-02 20:17:12','Active'),
+        ('Health and Fitness','1','2025-06-02 20:17:23',NULL,'2025-06-02 20:17:23','Active'),
+        ('Music','1','2025-06-02 20:17:26',NULL,'2025-06-02 20:17:26','Active');
+    """
+    execute_query(category_insert_query, "Default categories inserted into 'CategoryMaster'.")
+
 def execute_query(query, success_message):
     """Execute a given query and print a success message."""
     connection = get_db_connection()
@@ -368,10 +407,12 @@ def execute_query(query, success_message):
 
 if __name__ == "__main__":
     create_users_table()
+    create_category_master_table()
+    insert_category_master_defaults()
     create_course_master_table()
     create_course_module_table()
     ensure_userCreation_stored_procedure_exists()
-    insert_admin_user()
+    insert_admin_user()    
     # create_module_video_table()
     # create_testimonial_table()
     # create_email_log_table()
@@ -382,5 +423,5 @@ if __name__ == "__main__":
     # create_subscription_plan_table()
     # create_user_subscription_table()
     # insert_default_data()
-    
-    
+
+
