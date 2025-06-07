@@ -130,3 +130,4 @@ Models//__pycache__/
 Services//__pycache__/
 
 Controllers//__pycache__/
+.env
