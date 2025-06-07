@@ -1,5 +1,6 @@
 from DB.db import get_db_connection
 from Models.courseModel import CourseRequest, CourseResponse, CourseUpdateRequest
+from Models.moduleVideoModel import ModuleVideoRequest, ModuleVideoResponse
 import mysql.connector
 
 def create_course(course_data: CourseRequest, user_id: int) -> CourseResponse:
@@ -237,6 +238,115 @@ def get_all_courses() -> list[CourseResponse]:
                 )
                 for course in courses
             ]
+        except mysql.connector.Error as err:
+            raise Exception(f"Database error: {err}")
+        finally:
+            if cursor:
+                cursor.close()
+            connection.close()
+    else:
+        raise Exception("Failed to connect to the database.")
+
+def map_video_db_to_response(video: dict) -> dict:
+    def to_str(dt):
+        return dt.isoformat() if dt is not None else None
+
+    return {
+        "video_id": video.get("VideoId"),
+        "course_id": video.get("CourseId"),
+        "module_id": video.get("ModuleId"),
+        "video_title": video.get("VideoTitle"),
+        "video_url": video.get("VideoUrl"),
+        "duration_in_seconds": video.get("DurationInSeconds"),
+        "sequence_no": video.get("SequenceNo"),
+        "created_by": video.get("CreatedBy"),
+        "created_at": to_str(video.get("CreatedAt")),
+        "updated_by": video.get("UpdatedBy"),
+        "updated_at": to_str(video.get("UpdatedAt")),
+        "status": video.get("Status"),
+    }
+
+def insert_module_video(video_data: ModuleVideoRequest) -> ModuleVideoResponse:
+    """
+    Insert a new video into the ModuleVideo table.
+    """
+    query = """
+        INSERT INTO ModuleVideo (
+            CourseId, ModuleId, VideoTitle, VideoUrl, DurationInSeconds, SequenceNo, CreatedBy, Status
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    connection = get_db_connection()
+    cursor = None
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute(
+                query,
+                (
+                    video_data.course_id,
+                    video_data.module_id,
+                    video_data.video_title,
+                    video_data.video_url,
+                    video_data.duration_in_seconds,
+                    video_data.sequence_no,
+                    video_data.created_by,
+                    "Active"
+                ),
+            )
+            connection.commit()
+            video_id = cursor.lastrowid
+            # Fetch the inserted row for response
+            cursor.execute("SELECT * FROM ModuleVideo WHERE VideoId = %s", (video_id,))
+            video = cursor.fetchone()
+            return ModuleVideoResponse(**map_video_db_to_response(video))
+        except mysql.connector.Error as err:
+            raise Exception(f"Database error: {err}")
+        finally:
+            if cursor:
+                cursor.close()
+            connection.close()
+    else:
+        raise Exception("Failed to connect to the database.")
+
+def get_module_videos(course_id: int, module_id: int) -> list[ModuleVideoResponse]:
+    """
+    Get all videos for a given course and module.
+    """
+    query = """
+        SELECT * FROM ModuleVideo
+        WHERE CourseId = %s AND ModuleId = %s AND Status = 'Active'
+        ORDER BY SequenceNo ASC
+    """
+    connection = get_db_connection()
+    cursor = None
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute(query, (course_id, module_id))
+            videos = cursor.fetchall()
+            return [ModuleVideoResponse(**map_video_db_to_response(video)) for video in videos]
+        except mysql.connector.Error as err:
+            raise Exception(f"Database error: {err}")
+        finally:
+            if cursor:
+                cursor.close()
+            connection.close()
+    else:
+        raise Exception("Failed to connect to the database.")
+
+def delete_module_video(video_id: int) -> str:
+    """
+    Delete a video by its VideoId.
+    """
+    query = "DELETE FROM ModuleVideo WHERE VideoId = %s"
+    connection = get_db_connection()
+    cursor = None
+    if connection:
+        try:
+            cursor = connection.cursor()
+            cursor.execute(query, (video_id,))
+            connection.commit()
+            return "Video deleted successfully"
         except mysql.connector.Error as err:
             raise Exception(f"Database error: {err}")
         finally:

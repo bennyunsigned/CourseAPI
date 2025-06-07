@@ -147,10 +147,11 @@ def create_module_video_table():
     table_query = """
     CREATE TABLE IF NOT EXISTS ModuleVideo (
         VideoId INT AUTO_INCREMENT PRIMARY KEY,
+        CourseId INT,
         ModuleId INT,
         VideoTitle VARCHAR(255) NOT NULL,
-        VideoPath VARCHAR(500),
-        DurationInSeconds INT,
+        VideoUrl VARCHAR(500),
+        DurationInSeconds VARCHAR(10),
         SequenceNo INT,
         CreatedBy VARCHAR(255),
         CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -413,7 +414,7 @@ if __name__ == "__main__":
     create_course_module_table()
     ensure_userCreation_stored_procedure_exists()
     insert_admin_user()    
-    # create_module_video_table()
+    create_module_video_table()
     # create_testimonial_table()
     # create_email_log_table()
     # create_sms_log_table()

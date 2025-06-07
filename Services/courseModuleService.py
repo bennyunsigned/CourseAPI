@@ -63,13 +63,19 @@ def get_module_by_id(ModuleId: int) -> CourseModuleResponse:
         if cursor: cursor.close()
         if connection: connection.close()
 
-def get_all_modules() -> list[CourseModuleResponse]:
-    query = "SELECT A.CourseId,B.CourseName,A.ModuleId,A.ModuleName,A.ModuleDescription,A.SequenceNo,A.CreatedBy,A.Status FROM CourseModule A inner join CourseMaster B on A.CourseId=B.CourseId where A.Status='Active'"
+def get_all_modules(course_id: int) -> list[CourseModuleResponse]:
+    query = """
+        SELECT A.CourseId, B.CourseName, A.ModuleId, A.ModuleName, A.ModuleDescription, 
+               A.SequenceNo, A.CreatedBy, A.Status
+        FROM CourseModule A
+        INNER JOIN CourseMaster B ON A.CourseId = B.CourseId
+        WHERE A.Status = 'Active' AND A.CourseId = %s
+    """
     connection = get_db_connection()
     cursor = None
     try:
         cursor = connection.cursor(dictionary=True)
-        cursor.execute(query)
+        cursor.execute(query, (course_id,))
         modules = cursor.fetchall()
         return [
             CourseModuleResponse(
@@ -77,7 +83,7 @@ def get_all_modules() -> list[CourseModuleResponse]:
                 CourseId=m["CourseId"],
                 ModuleName=m["ModuleName"],
                 ModuleDescription=m["ModuleDescription"],
-                SequenceNo=str(m["SequenceNo"]) if m["SequenceNo"] is not None else None,               
+                SequenceNo=str(m["SequenceNo"]) if m["SequenceNo"] is not None else None,
                 CreatedBy=m["CreatedBy"],
                 Status=m["Status"],
                 CourseName=m["CourseName"] if m["CourseName"] is not None else None
