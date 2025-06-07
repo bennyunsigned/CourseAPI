@@ -1,5 +1,3 @@
-# video_router.py
-
 import os
 from fastapi import APIRouter, UploadFile, File, HTTPException, Body
 from fastapi.responses import StreamingResponse, JSONResponse
