@@ -15,6 +15,7 @@ from Controllers.courseController import course_router
 from Controllers.courseModuleController import course_module_router
 from Controllers.utilController import util_router
 from Controllers.categoryController import category_router
+from Controllers.courseProgressController import course_progress_router
 
 # ✅ FastAPI app
 app = FastAPI(
@@ -52,6 +53,7 @@ app.include_router(course_router, prefix="/api/course", tags=["Course"])
 app.include_router(course_module_router, prefix="/api/courseModule", tags=["CourseModule"])
 app.include_router(util_router, prefix="/api/media", tags=["Video"])
 app.include_router(category_router, prefix="/api/category", tags=["Category"])
+app.include_router(course_progress_router, prefix="/api/courseProgress", tags=["CourseProgress"])
 
 # ✅ Root Endpoint
 @app.get("/", response_class=HTMLResponse)
