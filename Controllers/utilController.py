@@ -6,6 +6,8 @@ import threading
 import asyncio
 from datetime import datetime
 import uuid
+import re
+import requests
 
 util_router = APIRouter()
 
@@ -46,43 +48,30 @@ async def get_youtube_duration(payload: dict = Body(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch duration: {str(e)}")
 
-# @video_router.get("/download")
-# async def download_video():
-#     queue = asyncio.Queue()
-#     loop = asyncio.get_running_loop()  # Capture the main event loop
+@util_router.post("/getDailymotionDuration")
+async def get_dailymotion_duration(payload: dict = Body(...)):
+    url = payload.get("url")
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    # Extract video ID from the Dailymotion URL
+    match = re.search(r'dailymotion\.com/video/([a-zA-Z0-9]+)', url)
+    if not match:
+        raise HTTPException(status_code=400, detail="Invalid Dailymotion URL")
+    video_id = match.group(1)
+    api_url = f"https://api.dailymotion.com/video/{video_id}?fields=duration"
+    try:
+        resp = requests.get(api_url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            duration = data.get("duration")
+            if duration is None:
+                raise HTTPException(status_code=404, detail="Duration not found")
+            minutes = duration // 60
+            seconds = duration % 60
+            duration_str = f"{minutes}:{seconds:02d}"
+            return {"duration": duration_str}
+        else:
+            raise HTTPException(status_code=resp.status_code, detail="Failed to fetch duration from Dailymotion API")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch duration: {str(e)}")
 
-#     def progress_hook(d):
-#         if d['status'] == 'downloading':
-#             downloaded = d.get('downloaded_bytes') or 0
-#             total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
-#             if total > 0:
-#                 percent = f"{int(downloaded / total * 100)}%"
-#             else:
-#                 percent = "0%"
-#             asyncio.run_coroutine_threadsafe(queue.put(percent), loop)
-
-#     def download():
-#         url = 'https://www.youtube.com/watch?v=nwrSD4m9up8'
-#         output_path = '.'
-#         ydl_opts = {
-#             'outtmpl': f'{output_path}/%(title)s.%(ext)s',
-#             'format': 'bestvideo+bestaudio/best',
-#             'progress_hooks': [progress_hook],
-#         }
-#         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-#             ydl.download([url])
-#         # Signal completion
-#         asyncio.run_coroutine_threadsafe(queue.put("done"), loop)
-
-#     # Start download in a separate thread
-#     threading.Thread(target=download, daemon=True).start()
-
-#     async def event_stream():
-#         while True:
-#             percent = await queue.get()
-#             if percent == "done":
-#                 yield "data: done\n\n"
-#                 break
-#             yield f"data: {percent}\n\n"
-
-#     return StreamingResponse(event_stream(), media_type="text/event-stream")
