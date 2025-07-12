@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.exceptions import RequestValidationError
@@ -31,7 +32,8 @@ app.add_middleware(
 )
 
 # ✅ HTTPS Redirection (optional if NGINX handles it)
-app.add_middleware(HTTPSRedirectMiddleware)
+if os.getenv("ENV") == "Production":
+    app.add_middleware(HTTPSRedirectMiddleware)
 
 # ✅ CORS Settings
 app.add_middleware(
