@@ -125,3 +125,43 @@ def get_public_course_content(
             cursor.close()
         if connection:
             connection.close()
+
+@course_progress_router.get("/max-module-id/")
+def get_max_module_id():
+    """
+    Returns the maximum ModuleId from courseModule table.
+    """
+    connection = get_db_connection()
+    cursor = None
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT MAX(ModuleId) AS MaxModuleId FROM CourseModule")
+        result = cursor.fetchone()
+        return {"MaxModuleId": result["MaxModuleId"] if result["MaxModuleId"] is not None else 0}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+@course_progress_router.get("/max-video-id/")
+def get_max_video_id():
+    """
+    Returns the maximum VideoId from modulevideo table.
+    """
+    connection = get_db_connection()
+    cursor = None
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT MAX(VideoId) AS MaxVideoId FROM ModuleVideo")
+        result = cursor.fetchone()
+        return {"MaxVideoId": result["MaxVideoId"] if result["MaxVideoId"] is not None else 0}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()

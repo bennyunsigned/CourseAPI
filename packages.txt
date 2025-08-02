@@ -11,5 +11,9 @@ google-auth-oauthlib
 yt-dlp
 pycryptodomex
 python-multipart
-moviepy=1.0.3
+moviepy==1.0.3
 openpyxl
+SpeechRecognition 
+pydub
+tqdm
+ollama
