@@ -8,6 +8,9 @@ from datetime import datetime
 import uuid
 import re
 import requests
+import tempfile
+from moviepy.editor import VideoFileClip
+from urllib.parse import urlparse, unquote
 
 util_router = APIRouter()
 
@@ -75,3 +78,56 @@ async def get_dailymotion_duration(payload: dict = Body(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch duration: {str(e)}")
 
+def convert_to_download_url(details_url):
+    try:
+        parsed = urlparse(details_url)
+        if "archive.org" not in parsed.netloc or not parsed.path.startswith("/details/"):
+            return None
+        parts = parsed.path.strip("/").split("/")
+        if len(parts) < 3:
+            return None
+        identifier = parts[1]
+        filename = unquote(parts[2]).replace("+", " ")
+        download_url = f"https://archive.org/download/{identifier}/{requests.utils.quote(filename)}"
+        return download_url
+    except Exception:
+        return None
+
+@util_router.post("/getArchiveOrgDuration")
+async def get_archiveorg_duration(payload: dict = Body(...)):
+    url = payload.get("url")
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    download_url = convert_to_download_url(url)
+    if not download_url:
+        raise HTTPException(status_code=400, detail="Invalid archive.org /details/ URL")
+
+    def stream_progress():
+        temp_video = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video:
+                resp = requests.get(download_url, stream=True)
+                resp.raise_for_status()
+                total = int(resp.headers.get("content-length", 0))
+                downloaded = 0
+                if total == 0:
+                    yield '{"progress": "indeterminate"}\n'
+                for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                    temp_video.write(chunk)
+                    downloaded += len(chunk)
+                    if total > 0:
+                        percent = int(downloaded * 100 / total)
+                        percent = min(percent, 100)  # Cap at 100%
+                        yield f'{{"progress": {percent}}}\n'
+                temp_video.flush()
+            clip = VideoFileClip(temp_video.name)
+            duration = int(clip.duration)
+            clip.close()
+            yield f'{{"duration": {duration}}}\n'
+        except Exception as e:
+            yield f'{{"error": "{str(e)}"}}\n'
+        finally:
+            if temp_video and os.path.exists(temp_video.name):
+                os.remove(temp_video.name)
+
+    return StreamingResponse(stream_progress(), media_type="application/json")

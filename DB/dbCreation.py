@@ -321,6 +321,85 @@ def create_user_subscription_table():
     """
     execute_query(table_query, "Table 'UserSubscription' ensured to exist.")
 
+def ensure_getCourseContentDetails_procedure_exists():
+    """Ensure the GetCourseContentDetails stored procedure exists in the database."""
+    procedure_query = """
+    CREATE PROCEDURE GetCourseContentDetails(IN p_CourseId INT)
+    BEGIN
+      SELECT
+        crs.CourseId,
+        crs.CourseName,
+        crs.CourseDescription,
+        crs.CourseInfo,
+        crs.CourseLanguage,
+        crs.BannerImage,
+        crs.Author,
+        crs.Rating,
+        crs.ActualPrice,
+        crs.DiscountedPrice,
+        crs.IsPremium,
+        crs.IsBestSeller,
+        crs.VideoPath,
+        crs.IsPublic,
+
+        modu.ModuleId,
+        modu.ModuleName,
+        modu.ModuleDescription,
+        modu.SequenceNo AS ModuleSequenceNo,
+
+        vid.VideoId,
+        vid.VideoTitle,
+        vid.VideoUrl,
+        vid.DurationInSeconds,
+        vid.SequenceNo AS VideoSequenceNo,
+
+        mdur.TotalDurationPerModule,
+        cdur.TotalDurationPerCourse
+
+      FROM CourseMaster AS crs
+      INNER JOIN CourseModule AS modu ON crs.CourseId = modu.CourseId
+      INNER JOIN ModuleVideo AS vid ON modu.ModuleId = vid.ModuleId
+
+      LEFT JOIN (
+        SELECT ModuleId, SUM(DurationInSeconds) AS TotalDurationPerModule
+        FROM ModuleVideo
+        GROUP BY ModuleId
+      ) AS mdur ON modu.ModuleId = mdur.ModuleId
+
+      LEFT JOIN (
+        SELECT cm.CourseId, SUM(mv.DurationInSeconds) AS TotalDurationPerCourse
+        FROM CourseModule cm
+        JOIN ModuleVideo mv ON cm.ModuleId = mv.ModuleId
+        GROUP BY cm.CourseId
+      ) AS cdur ON crs.CourseId = cdur.CourseId
+
+      WHERE crs.Status = 'Active'
+        AND modu.Status = 'Active'
+        AND vid.Status = 'Active'
+        AND crs.CourseId = p_CourseId
+
+      ORDER BY crs.CourseId, modu.SequenceNo, vid.SequenceNo;
+    END
+    """
+    connection = get_db_connection()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            cursor.execute("SHOW PROCEDURE STATUS WHERE Name = 'GetCourseContentDetails'")
+            result = cursor.fetchone()
+            if not result:
+                cursor.execute("DROP PROCEDURE IF EXISTS GetCourseContentDetails")
+                cursor.execute(procedure_query)
+                print("Stored procedure 'GetCourseContentDetails' created successfully.")
+            else:
+                print("Stored procedure 'GetCourseContentDetails' already exists.")
+            connection.commit()
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+        finally:
+            cursor.close()
+            connection.close()
+
 def insert_default_data():
     """Insert default data into the database."""
     default_data_queries = [
@@ -413,8 +492,10 @@ if __name__ == "__main__":
     create_course_master_table()
     create_course_module_table()
     ensure_userCreation_stored_procedure_exists()
+    ensure_getCourseContentDetails_procedure_exists()  # <-- Add this line
     insert_admin_user()    
     create_module_video_table()
+    
     # create_testimonial_table()
     # create_email_log_table()
     # create_sms_log_table()
