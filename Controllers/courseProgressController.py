@@ -165,3 +165,91 @@ def get_max_video_id():
             cursor.close()
         if connection:
             connection.close()
+
+@course_progress_router.get("/public-course-content-by-category/", response_model=list[CourseContentModel])
+def get_public_course_content_by_category(
+    category_id: int = Query(..., description="Category ID"),
+    limit: int = Query(10, description="Limit"),
+    offset: int = Query(0, description="Offset")
+):
+    """
+    Public endpoint to get course content details by category using the stored procedure.
+    BannerImage will be returned as a base64 string.
+    """
+    connection = get_db_connection()
+    cursor = None
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.callproc('GetCourseContentDetailsByCategory', [category_id, limit, offset])
+        for result in cursor.stored_results():
+            rows = result.fetchall()
+            break
+        else:
+            rows = []
+
+        if not rows:
+            raise HTTPException(status_code=404, detail="No courses found for this category")
+
+        # Organize courses by CourseId
+        courses_dict = {}
+        for row in rows:
+            course_id = row["CourseId"]
+            if course_id not in courses_dict:
+                banner_path = row.get("BannerImage")
+                base64_banner = None
+                if banner_path and os.path.isfile("." + banner_path):
+                    with open("." + banner_path, "rb") as img_file:
+                        base64_banner = "data:image/jpeg;base64," + base64.b64encode(img_file.read()).decode("utf-8")
+                courses_dict[course_id] = {
+                    "CourseId": course_id,
+                    "CourseName": row["CourseName"],
+                    "CourseDescription": row["CourseDescription"],
+                    "CourseInfo": row.get("CourseInfo"),
+                    "CourseLanguage": row.get("CourseLanguage"),
+                    "BannerImage": base64_banner,
+                    "Author": row.get("Author"),
+                    "Rating": row.get("Rating"),
+                    "ActualPrice": row["ActualPrice"],
+                    "DiscountedPrice": row["DiscountedPrice"],
+                    "IsPremium": row["IsPremium"],
+                    "IsBestSeller": row["IsBestSeller"],
+                    "VideoPath": row.get("VideoPath"),
+                    "IsPublic": row["IsPublic"],
+                    "TotalDurationPerCourse": row["TotalDurationPerCourse"],
+                    "CategoryId": row["CategoryId"],
+                    "CategoryName": row["CategoryName"],
+                    "Modules": {}
+                }
+            mod_id = row["ModuleId"]
+            modules = courses_dict[course_id]["Modules"]
+            if mod_id not in modules:
+                modules[mod_id] = {
+                    "ModuleId": mod_id,
+                    "ModuleName": row["ModuleName"],
+                    "ModuleDescription": row["ModuleDescription"],
+                    "ModuleSequenceNo": row["ModuleSequenceNo"],
+                    "TotalDurationPerModule": row["TotalDurationPerModule"],
+                    "Videos": []
+                }
+            modules[mod_id]["Videos"].append(VideoModel(
+                VideoId=row["VideoId"],
+                VideoTitle=row["VideoTitle"],
+                VideoUrl=row["VideoUrl"],
+                DurationInSeconds=int(row["DurationInSeconds"]),
+                VideoSequenceNo=row["VideoSequenceNo"]
+            ))
+
+        # Build the response model (list of courses)
+        response = []
+        for course in courses_dict.values():
+            course["Modules"] = [ModuleModel(**mod) for mod in course["Modules"].values()]
+            response.append(CourseContentModel(**course))
+        return response
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
