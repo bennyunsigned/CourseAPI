@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from DB.db import get_db_connection
 from Utils.JWT import authenticate_request
 import base64
@@ -158,6 +158,78 @@ def get_max_video_id():
         cursor.execute("SELECT MAX(VideoId) AS MaxVideoId FROM ModuleVideo")
         result = cursor.fetchone()
         return {"MaxVideoId": result["MaxVideoId"] if result["MaxVideoId"] is not None else 0}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+            
+@course_progress_router.post("/course-module/")
+async def insert_course_module(request: Request):
+    data = await request.json()
+    connection = get_db_connection()
+    cursor = None
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            INSERT INTO CourseModule (ModuleId, CourseId, ModuleName, ModuleDescription, SequenceNo, CreatedBy, CreatedAt, UpdatedBy, UpdatedAt, Status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                data["ModuleId"],
+                data["CourseId"],
+                data["ModuleName"],
+                data["ModuleDescription"],
+                data["SequenceNo"],
+                data.get("CreatedBy", "system"),
+                data.get("CreatedAt"),
+                data.get("UpdatedBy", "system"),
+                data.get("UpdatedAt"),
+                data.get("Status", "Active")
+            )
+        )
+        connection.commit()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+@course_progress_router.post("/module-video/")
+async def insert_module_video(request: Request):
+    data = await request.json()
+    connection = get_db_connection()
+    cursor = None
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            INSERT INTO ModuleVideo (VideoId, CourseId, ModuleId, VideoTitle, VideoUrl, DurationInSeconds, SequenceNo, CreatedBy, CreatedAt, UpdatedBy, UpdatedAt, Status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                data["VideoId"],
+                data["CourseId"],
+                data["ModuleId"],
+                data["VideoTitle"],
+                data["VideoUrl"],
+                data["DurationInSeconds"],
+                data["SequenceNo"],
+                data.get("CreatedBy", "system"),
+                data.get("CreatedAt"),
+                data.get("UpdatedBy", "system"),
+                data.get("UpdatedAt"),
+                data.get("Status", "Active")
+            )
+        )
+        connection.commit()
+        return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
