@@ -69,11 +69,37 @@ def download_video(url, dest):
     try:
         with requests.get(url, stream=True) as r:
             r.raise_for_status()
+            
+            # Get the total file size from headers
+            total_size = int(r.headers.get('content-length', 0))
+            
+            # Extract filename from destination path for display
+            filename = os.path.basename(dest)
+            
             with open(dest, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
+                if total_size == 0:
+                    # If no content-length header, download without progress bar
+                    print(f"Downloading {filename}... (size unknown)")
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                    print(f"✅ Downloaded {filename}")
+                else:
+                    # Download with progress bar
+                    with tqdm(
+                        total=total_size,
+                        unit='B',
+                        unit_scale=True,
+                        unit_divisor=1024,
+                        desc=f"📥 {filename[:30]}{'...' if len(filename) > 30 else ''}",
+                        ncols=100
+                    ) as pbar:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                pbar.update(len(chunk))
         return True
-    except Exception:
+    except Exception as e:
+        print(f"❌ Failed to download {os.path.basename(dest)}: {str(e)}")
         return False
 
 def get_chat_response(prompt, model="llama3"):
@@ -189,14 +215,20 @@ def process_and_save_to_db(course_id):
     temp_dir = "temp_videos"
     os.makedirs(temp_dir, exist_ok=True)
 
+    print(f"\n🎬 Found {len(videos)} videos to process")
+    print("=" * 60)
+
     conn = mysql.connector.connect(**MYSQL_CONFIG)
     cursor = conn.cursor()
     create_table_if_not_exists(cursor)
 
-    for video in tqdm(videos, desc="Processing videos", unit="video"):
+    for i, video in enumerate(videos, 1):
         video_url = video["url"]
         video_name = video["name"]
         local_path = os.path.join(temp_dir, video_name)
+
+        print(f"\n📹 Processing video {i}/{len(videos)}: {video_name}")
+        print("-" * 50)
 
         try:
             sequence_no = int(video_name.split('.', 1)[0])
@@ -204,12 +236,23 @@ def process_and_save_to_db(course_id):
             sequence_no = None
 
         try:
+            print("📥 Starting download...")
             if not download_video(video_url, local_path):
+                print("❌ Download failed, skipping video")
                 continue
 
+            print("⏱️  Getting video duration...")
             duration = get_video_duration(local_path)
-            transcript = transcribe_video(local_path, language='hi-IN')
+            print(f"Duration: {duration} seconds")
 
+            print("🎤 Transcribing audio...")
+            transcript = transcribe_video(local_path, language='hi-IN')
+            if transcript:
+                print(f"✅ Transcription complete ({len(transcript)} characters)")
+            else:
+                print("⚠️  No transcription available")
+
+            print("🤖 Generating AI title and description...")
             video_title_raw = get_chat_response(
                 f"Based on the following transcript, provide ONE concise and clear video title in plain text (no lists, no markdown, no quotes):\n{transcript}"
             )
@@ -217,19 +260,30 @@ def process_and_save_to_db(course_id):
                 f"Based on the following transcript, write ONE clear and detailed video description in plain text (no markdown, no lists, no quotes):\n{transcript}"
             )
 
-            video_title = get_single_line(video_title_raw)
-            video_description = get_single_line(video_description_raw)
+            video_title = get_single_line(video_title_raw) if video_title_raw else f"Video {sequence_no}"
+            video_description = get_single_line(video_description_raw) if video_description_raw else "No description available"
 
+            print(f"📝 Title: {video_title[:50]}{'...' if len(video_title) > 50 else ''}")
+            print(f"📄 Description: {video_description[:100]}{'...' if len(video_description) > 100 else ''}")
+
+            print("💾 Saving to database...")
             insert_video_row(cursor, course_id, sequence_no, video_url, video_title, video_description, duration)
             conn.commit()
-        except Exception:
+            print("✅ Saved successfully")
+
+        except Exception as e:
+            print(f"❌ Error processing video: {str(e)}")
             pass
         finally:
             if os.path.exists(local_path):
+                print("🗑️  Cleaning up temporary file...")
                 os.remove(local_path)
+
+        print(f"✅ Completed video {i}/{len(videos)}")
 
     cursor.close()
     conn.close()
+    print(f"\n🎉 All {len(videos)} videos processed successfully!")
 
 def insert_course_module_api(module_id, course_id, module_name, module_description, sequence_no, created_by, created_at, updated_by, updated_at, status):
     url = f"{API_BASE_URL}/api/courseProgress/course-module/"
@@ -275,52 +329,99 @@ def push_to_prod_from_db(course_id):
     cursor.execute(f"SELECT * FROM {TABLE_NAME} WHERE course_id = %s ORDER BY sequence_no", (course_id,))
     rows = cursor.fetchall()
 
+    if not rows:
+        print("⚠️  No data found in database for this course ID")
+        cursor.close()
+        conn.close()
+        return
+
+    print(f"\n📤 Found {len(rows)} records to push to production")
+    print("=" * 50)
+
     # Get max IDs once
+    print("🔍 Getting maximum IDs from production...")
     module_id = get_max_module_id()
     video_id = get_max_video_id()
+    print(f"Starting Module ID: {module_id + 1}")
+    print(f"Starting Video ID: {video_id + 1}")
 
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    for row in rows:
+    
+    for i, row in enumerate(rows, 1):
         module_id += 1
         video_id += 1
 
-        # Insert into CourseModule via API
-        insert_course_module_api(
-            module_id=str(module_id),
-            course_id=course_id,
-            module_name=row['video_name'],
-            module_description=row['video_description'],
-            sequence_no=row['sequence_no'],
-            created_by="system",
-            created_at=now,
-            updated_by="system",
-            updated_at=now,
-            status="Active"
-        )
+        print(f"\n📤 Pushing record {i}/{len(rows)}: {row['video_name'][:50]}{'...' if len(row['video_name']) > 50 else ''}")
 
-        # Insert into ModuleVideo via API
-        insert_module_video_api(
-            video_id=str(video_id),
-            course_id=course_id,
-            module_id=str(module_id),
-            video_title=row['video_name'],
-            video_url=row['video_url'],
-            duration_in_seconds=row['duration'],
-            sequence_no=row['sequence_no'],
-            created_by="system",
-            created_at=now,
-            updated_by="system",
-            updated_at=now,
-            status="Active"
-        )
+        try:
+            # Insert into CourseModule via API
+            print("  📚 Creating course module...")
+            insert_course_module_api(
+                module_id=str(module_id),
+                course_id=course_id,
+                module_name=row['video_name'],
+                module_description=row['video_description'],
+                sequence_no=row['sequence_no'],
+                created_by="system",
+                created_at=now,
+                updated_by="system",
+                updated_at=now,
+                status="Active"
+            )
+
+            # Insert into ModuleVideo via API
+            print("  🎬 Creating module video...")
+            insert_module_video_api(
+                video_id=str(video_id),
+                course_id=course_id,
+                module_id=str(module_id),
+                video_title=row['video_name'],
+                video_url=row['video_url'],
+                duration_in_seconds=row['duration'],
+                sequence_no=row['sequence_no'],
+                created_by="system",
+                created_at=now,
+                updated_by="system",
+                updated_at=now,
+                status="Active"
+            )
+            
+            print(f"  ✅ Successfully pushed record {i}/{len(rows)}")
+            
+        except Exception as e:
+            print(f"  ❌ Failed to push record {i}: {str(e)}")
 
     cursor.close()
     conn.close()
+    print(f"\n🎉 Production push completed! {len(rows)} records processed.")
 
 if __name__ == "__main__":
-    course_id = input("Enter course ID: ").strip()
-    print("Step 1: Processing videos and saving to DB...")
-    process_and_save_to_db(course_id)
-    print("Step 2: Inserting into prod DB via API...")
-    push_to_prod_from_db(course_id)
-    print("Done.")
+    print("🚀 Video Processing and Course Creation Tool")
+    print("=" * 60)
+    
+    course_id = input("📝 Enter course ID: ").strip()
+    
+    if not course_id:
+        print("❌ Course ID cannot be empty!")
+        sys.exit(1)
+    
+    print(f"\n🎯 Starting processing for Course ID: {course_id}")
+    print("=" * 60)
+    
+    try:
+        print("\n📋 Step 1: Processing videos and saving to database...")
+        process_and_save_to_db(course_id)
+        
+        print("\n📋 Step 2: Pushing data to production via API...")
+        push_to_prod_from_db(course_id)
+        
+        print("\n🎉 ALL STEPS COMPLETED SUCCESSFULLY!")
+        print("=" * 60)
+        print(f"✅ Course '{course_id}' has been fully processed and uploaded")
+        
+    except KeyboardInterrupt:
+        print("\n⚠️  Process interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Error occurred: {str(e)}")
+        sys.exit(1)

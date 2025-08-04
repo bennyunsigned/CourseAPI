@@ -129,7 +129,7 @@ def create_course_module_table():
     CREATE TABLE IF NOT EXISTS CourseModule (
         ModuleId INT AUTO_INCREMENT PRIMARY KEY,
         CourseId INT,
-        ModuleName VARCHAR(255) NOT NULL,
+        ModuleName TEXT NOT NULL,
         ModuleDescription TEXT,
         SequenceNo INT,
         CreatedBy VARCHAR(255),
@@ -149,8 +149,8 @@ def create_module_video_table():
         VideoId INT AUTO_INCREMENT PRIMARY KEY,
         CourseId INT,
         ModuleId INT,
-        VideoTitle VARCHAR(255) NOT NULL,
-        VideoUrl VARCHAR(500),
+        VideoTitle TEXT NOT NULL,
+        VideoUrl TEXT,
         DurationInSeconds VARCHAR(10),
         SequenceNo INT,
         CreatedBy VARCHAR(255),
@@ -162,6 +162,21 @@ def create_module_video_table():
     );
     """
     execute_query(table_query, "Table 'ModuleVideo' ensured to exist.")
+
+def create_course_content_operations_table():
+    """Create the course_content_operations table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS course_content_operations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        course_id VARCHAR(255),
+        sequence_no INT,
+        video_url TEXT,
+        video_name TEXT,
+        video_description TEXT,
+        duration INT
+    );
+    """
+    execute_query(table_query, "Table 'course_content_operations' ensured to exist.")
 
 def create_testimonial_table():
     """Create the Testimonial table if it does not exist."""
@@ -574,16 +589,17 @@ def execute_query(query, success_message):
 
 
 if __name__ == "__main__":
-    # create_users_table()
-    # create_category_master_table()
-    # insert_category_master_defaults()
-    # create_course_master_table()
-    # create_course_module_table()
-    # ensure_userCreation_stored_procedure_exists()
-    # ensure_getCourseContentDetails_procedure_exists()  # <-- Add this line
+    create_users_table()
+    create_category_master_table()
+    insert_category_master_defaults()
+    create_course_master_table()
+    create_course_module_table()
+    ensure_userCreation_stored_procedure_exists()
+    ensure_getCourseContentDetails_procedure_exists()  # <-- Add this line
     ensure_getCourseContentDetailsByCategory_procedure_exists()  # <-- Add this line
-    # insert_admin_user()    
-    # create_module_video_table()
+    insert_admin_user()    
+    create_module_video_table()
+    create_course_content_operations_table()
     
     # create_testimonial_table()
     # create_email_log_table()
