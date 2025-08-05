@@ -17,6 +17,7 @@ import datetime
 load_dotenv()
 
 # --- CONFIGURATION ---
+#API_BASE_URL = os.environ.get('API_BASE_URL', 'https://api.vidyaroop.com')
 API_BASE_URL = os.environ.get('API_BASE_URL', 'http://127.0.0.1:8000')
 MAX_MODULE_ID_URL = f"{API_BASE_URL}/api/courseProgress/max-module-id/"
 MAX_VIDEO_ID_URL = f"{API_BASE_URL}/api/courseProgress/max-video-id/"
@@ -28,7 +29,7 @@ MYSQL_CONFIG = {
     'database': os.environ.get('DB_NAME', 'course_db')
 }
 TABLE_NAME = 'course_content_operations'
-ITEM_IDENTIFIER = "1.-java-programming-bootcamp-zero-to-mastery-zero-to-mastery-academy-1920x-1080-4085-k"  # Replace as needed
+ITEM_IDENTIFIER = "001-introduction_202507"  # Replace as needed
 
 STATEMENTS_DIR = r"c:\Course_Module_Video_Statements"
 os.makedirs(STATEMENTS_DIR, exist_ok=True)
@@ -189,21 +190,125 @@ VALUES
         f.write(video_sql)
         f.write("\n")
 
-def get_max_module_id():
+def test_api_connectivity():
+    """Test API connectivity before starting the main process"""
+    print("🔍 Testing API connectivity...")
+    print("-" * 40)
+    
+    # Test max module ID endpoint
     try:
-        resp = requests.get(MAX_MODULE_ID_URL)
+        print(f"🧪 Testing: {MAX_MODULE_ID_URL}")
+        resp = requests.get(MAX_MODULE_ID_URL, timeout=10)
         resp.raise_for_status()
-        return int(resp.json().get("max_module_id", 0))
-    except Exception:
+        data = resp.json()
+        print(f"✅ Max Module ID API: Working (Response: {data})")
+    except Exception as e:
+        print(f"❌ Max Module ID API: Failed - {str(e)}")
+        return False
+    
+    # Test max video ID endpoint
+    try:
+        print(f"🧪 Testing: {MAX_VIDEO_ID_URL}")
+        resp = requests.get(MAX_VIDEO_ID_URL, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        print(f"✅ Max Video ID API: Working (Response: {data})")
+    except Exception as e:
+        print(f"❌ Max Video ID API: Failed - {str(e)}")
+        return False
+    
+    print("✅ All API endpoints are working!")
+    return True
+
+def get_max_module_id_from_db():
+    """Fallback method to get max module ID directly from database"""
+    try:
+        conn = mysql.connector.connect(**MYSQL_CONFIG)
+        cursor = conn.cursor()
+        
+        # Try to get max ID from the actual coursemodule table
+        cursor.execute("SELECT MAX(CAST(ModuleId AS UNSIGNED)) FROM coursemodule")
+        result = cursor.fetchone()
+        max_id = result[0] if result[0] is not None else 0
+        
+        cursor.close()
+        conn.close()
+        
+        print(f"🔍 Database query result - Max Module ID: {max_id}")
+        return max_id
+    except Exception as e:
+        print(f"❌ Database query failed: {str(e)}")
         return 0
 
-def get_max_video_id():
+def get_max_video_id_from_db():
+    """Fallback method to get max video ID directly from database"""
     try:
-        resp = requests.get(MAX_VIDEO_ID_URL)
-        resp.raise_for_status()
-        return int(resp.json().get("max_video_id", 0))
-    except Exception:
+        conn = mysql.connector.connect(**MYSQL_CONFIG)
+        cursor = conn.cursor()
+        
+        # Try to get max ID from the actual modulevideo table
+        cursor.execute("SELECT MAX(CAST(VideoId AS UNSIGNED)) FROM modulevideo")
+        result = cursor.fetchone()
+        max_id = result[0] if result[0] is not None else 0
+        
+        cursor.close()
+        conn.close()
+        
+        print(f"🔍 Database query result - Max Video ID: {max_id}")
+        return max_id
+    except Exception as e:
+        print(f"❌ Database query failed: {str(e)}")
         return 0
+
+def get_max_module_id():
+    print(f"🔍 Fetching max module ID from: {MAX_MODULE_ID_URL}")
+    
+    # First try the API
+    try:
+        resp = requests.get(MAX_MODULE_ID_URL, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        print(f"📊 API Response: {data}")
+        
+        max_id = int(data.get("MaxModuleId", 0))
+        print(f"✅ API returned max module ID: {max_id}")
+        
+        # If API returns 0, try database fallback
+        if max_id == 0:
+            print("⚠️  API returned 0, trying database fallback...")
+            max_id = get_max_module_id_from_db()
+        
+        return max_id
+        
+    except Exception as e:
+        print(f"❌ API request failed: {str(e)}")
+        print("🔄 Falling back to database query...")
+        return get_max_module_id_from_db()
+
+def get_max_video_id():
+    print(f"🔍 Fetching max video ID from: {MAX_VIDEO_ID_URL}")
+    
+    # First try the API
+    try:
+        resp = requests.get(MAX_VIDEO_ID_URL, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        print(f"📊 API Response: {data}")
+        
+        max_id = int(data.get("MaxVideoId", 0))
+        print(f"✅ API returned max video ID: {max_id}")
+        
+        # If API returns 0, try database fallback
+        if max_id == 0:
+            print("⚠️  API returned 0, trying database fallback...")
+            max_id = get_max_video_id_from_db()
+        
+        return max_id
+        
+    except Exception as e:
+        print(f"❌ API request failed: {str(e)}")
+        print("🔄 Falling back to database query...")
+        return get_max_video_id_from_db()
 
 def get_single_line(text):
     # Remove newlines and excessive quotes for SQL safety
@@ -299,9 +404,26 @@ def insert_course_module_api(module_id, course_id, module_name, module_descripti
         "UpdatedAt": updated_at,
         "Status": status
     }
-    resp = requests.post(url, json=payload)
-    resp.raise_for_status()
-    return resp.json()
+    
+    try:
+        print(f"    🌐 POST {url}")
+        print(f"    📦 Payload: ModuleId={module_id}, CourseId={course_id}, SequenceNo={sequence_no}")
+        
+        resp = requests.post(url, json=payload, timeout=30)
+        resp.raise_for_status()
+        
+        response_data = resp.json()
+        print(f"    ✅ Course module API response: {response_data}")
+        return response_data
+        
+    except requests.exceptions.Timeout:
+        raise Exception("API request timed out after 30 seconds")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"API request failed: {str(e)} - Status: {resp.status_code if 'resp' in locals() else 'N/A'}")
+    except ValueError as e:
+        raise Exception(f"Invalid JSON response: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Unexpected error: {str(e)}")
 
 def insert_module_video_api(video_id, course_id, module_id, video_title, video_url, duration_in_seconds, sequence_no, created_by, created_at, updated_by, updated_at, status):
     url = f"{API_BASE_URL}/api/courseProgress/module-video/"
@@ -319,9 +441,26 @@ def insert_module_video_api(video_id, course_id, module_id, video_title, video_u
         "UpdatedAt": updated_at,
         "Status": status
     }
-    resp = requests.post(url, json=payload)
-    resp.raise_for_status()
-    return resp.json()
+    
+    try:
+        print(f"    🌐 POST {url}")
+        print(f"    📦 Payload: VideoId={video_id}, ModuleId={module_id}, Duration={duration_in_seconds}s")
+        
+        resp = requests.post(url, json=payload, timeout=30)
+        resp.raise_for_status()
+        
+        response_data = resp.json()
+        print(f"    ✅ Module video API response: {response_data}")
+        return response_data
+        
+    except requests.exceptions.Timeout:
+        raise Exception("API request timed out after 30 seconds")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"API request failed: {str(e)} - Status: {resp.status_code if 'resp' in locals() else 'N/A'}")
+    except ValueError as e:
+        raise Exception(f"Invalid JSON response: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Unexpected error: {str(e)}")
 
 def push_to_prod_from_db(course_id):
     conn = mysql.connector.connect(**MYSQL_CONFIG)
@@ -338,26 +477,48 @@ def push_to_prod_from_db(course_id):
     print(f"\n📤 Found {len(rows)} records to push to production")
     print("=" * 50)
 
-    # Get max IDs once
+    # Get max IDs with detailed logging
     print("🔍 Getting maximum IDs from production...")
-    module_id = get_max_module_id()
-    video_id = get_max_video_id()
-    print(f"Starting Module ID: {module_id + 1}")
-    print(f"Starting Video ID: {video_id + 1}")
+    try:
+        module_id = get_max_module_id()
+        video_id = get_max_video_id()
+        
+        print(f"📊 Current max module ID: {module_id}")
+        print(f"📊 Current max video ID: {video_id}")
+        print(f"🎯 Next module ID will start from: {module_id + 1}")
+        print(f"🎯 Next video ID will start from: {video_id + 1}")
+        
+        # Validate that we got reasonable values
+        if module_id < 0:
+            print("⚠️  Invalid module ID received, using 0")
+            module_id = 0
+        if video_id < 0:
+            print("⚠️  Invalid video ID received, using 0")
+            video_id = 0
+            
+    except Exception as e:
+        print(f"❌ Error getting max IDs: {str(e)}")
+        print("⚠️  Using fallback values: module_id=0, video_id=0")
+        module_id = 0
+        video_id = 0
 
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    successful_pushes = 0
+    failed_pushes = 0
     
     for i, row in enumerate(rows, 1):
-        module_id += 1
-        video_id += 1
+        # Increment IDs for this record
+        current_module_id = module_id + i
+        current_video_id = video_id + i
 
         print(f"\n📤 Pushing record {i}/{len(rows)}: {row['video_name'][:50]}{'...' if len(row['video_name']) > 50 else ''}")
+        print(f"   🆔 Module ID: {current_module_id}, Video ID: {current_video_id}")
 
         try:
             # Insert into CourseModule via API
             print("  📚 Creating course module...")
-            insert_course_module_api(
-                module_id=str(module_id),
+            module_response = insert_course_module_api(
+                module_id=str(current_module_id),
                 course_id=course_id,
                 module_name=row['video_name'],
                 module_description=row['video_description'],
@@ -368,13 +529,14 @@ def push_to_prod_from_db(course_id):
                 updated_at=now,
                 status="Active"
             )
+            print(f"  ✅ Module created successfully: {module_response}")
 
             # Insert into ModuleVideo via API
             print("  🎬 Creating module video...")
-            insert_module_video_api(
-                video_id=str(video_id),
+            video_response = insert_module_video_api(
+                video_id=str(current_video_id),
                 course_id=course_id,
-                module_id=str(module_id),
+                module_id=str(current_module_id),
                 video_title=row['video_name'],
                 video_url=row['video_url'],
                 duration_in_seconds=row['duration'],
@@ -385,15 +547,25 @@ def push_to_prod_from_db(course_id):
                 updated_at=now,
                 status="Active"
             )
+            print(f"  ✅ Video created successfully: {video_response}")
             
             print(f"  ✅ Successfully pushed record {i}/{len(rows)}")
+            successful_pushes += 1
             
         except Exception as e:
             print(f"  ❌ Failed to push record {i}: {str(e)}")
+            failed_pushes += 1
 
     cursor.close()
     conn.close()
-    print(f"\n🎉 Production push completed! {len(rows)} records processed.")
+    
+    print(f"\n🎉 Production push completed!")
+    print(f"✅ Successful: {successful_pushes}")
+    print(f"❌ Failed: {failed_pushes}")
+    print(f"📊 Total processed: {len(rows)}")
+    
+    if failed_pushes > 0:
+        print(f"⚠️  {failed_pushes} records failed to push. Check the error messages above.")
 
 if __name__ == "__main__":
     print("🚀 Video Processing and Course Creation Tool")
@@ -406,11 +578,22 @@ if __name__ == "__main__":
         sys.exit(1)
     
     print(f"\n🎯 Starting processing for Course ID: {course_id}")
+    print(f"🌐 API Base URL: {API_BASE_URL}")
+    print(f"🎞️  Archive Identifier: {ITEM_IDENTIFIER}")
     print("=" * 60)
     
+    # Test API connectivity first
+    if not test_api_connectivity():
+        print("\n❌ API connectivity test failed!")
+        print("Please check:")
+        print("1. API server is running")
+        print("2. API_BASE_URL is correct")
+        print("3. Network connectivity")
+        sys.exit(1)
+    
     try:
-        print("\n📋 Step 1: Processing videos and saving to database...")
-        process_and_save_to_db(course_id)
+        # print("\n📋 Step 1: Processing videos and saving to database...")
+        # process_and_save_to_db(course_id)
         
         print("\n📋 Step 2: Pushing data to production via API...")
         push_to_prod_from_db(course_id)
@@ -424,4 +607,6 @@ if __name__ == "__main__":
         sys.exit(1)
     except Exception as e:
         print(f"\n❌ Error occurred: {str(e)}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
