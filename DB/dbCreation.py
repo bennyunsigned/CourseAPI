@@ -418,12 +418,22 @@ def ensure_getCourseContentDetails_procedure_exists():
 def ensure_getCourseContentDetailsByCategory_procedure_exists():
     """Ensure the GetCourseContentDetailsByCategory stored procedure exists in the database."""
     procedure_query = """
-    CREATE PROCEDURE GetCourseContentDetailsByCategory(
+    CREATE DEFINER=`root`@`localhost` PROCEDURE GetCourseContentDetailsByCategory(
         IN p_CategoryId INT,
         IN p_Limit INT,
         IN p_Offset INT
     )
     BEGIN
+        -- Step 1: Get limited CourseIds
+        CREATE TEMPORARY TABLE TempCourseIds
+        SELECT CourseId
+        FROM CourseMaster
+        WHERE Status = 'Active'
+          AND (p_CategoryId = 0 OR CategoryId = p_CategoryId)
+        ORDER BY CourseId
+        LIMIT p_Limit OFFSET p_Offset;
+
+        -- Step 2: Join with full content
         SELECT
             crs.CourseId,
             crs.CourseName,
@@ -457,9 +467,10 @@ def ensure_getCourseContentDetailsByCategory_procedure_exists():
             mdur.TotalDurationPerModule,
             cdur.TotalDurationPerCourse
 
-        FROM CourseMaster AS crs
-        INNER JOIN CourseModule AS modu ON crs.CourseId = modu.CourseId
-        INNER JOIN ModuleVideo AS vid ON modu.ModuleId = vid.ModuleId
+        FROM TempCourseIds tmp
+        INNER JOIN CourseMaster AS crs ON tmp.CourseId = crs.CourseId
+        INNER JOIN CourseModule AS modu ON crs.CourseId = modu.CourseId AND modu.Status = 'Active'
+        INNER JOIN ModuleVideo AS vid ON modu.ModuleId = vid.ModuleId AND vid.Status = 'Active'
         INNER JOIN CategoryMaster AS cat ON crs.CategoryId = cat.CategoryId
 
         LEFT JOIN (
@@ -475,27 +486,18 @@ def ensure_getCourseContentDetailsByCategory_procedure_exists():
             GROUP BY cm.CourseId
         ) AS cdur ON crs.CourseId = cdur.CourseId
 
-        WHERE crs.Status = 'Active'
-          AND modu.Status = 'Active'
-          AND vid.Status = 'Active'
-          AND (p_CategoryId = 0 OR crs.CategoryId = p_CategoryId)
+        ORDER BY crs.CourseId, modu.SequenceNo, vid.SequenceNo;
 
-        ORDER BY crs.CourseId, modu.SequenceNo, vid.SequenceNo
-        LIMIT p_Limit OFFSET p_Offset;
+        DROP TEMPORARY TABLE TempCourseIds;
     END
     """
     connection = get_db_connection()
     if connection:
         try:
             cursor = connection.cursor()
-            cursor.execute("SHOW PROCEDURE STATUS WHERE Name = 'GetCourseContentDetailsByCategory'")
-            result = cursor.fetchone()
-            if not result:
-                cursor.execute("DROP PROCEDURE IF EXISTS GetCourseContentDetailsByCategory")
-                cursor.execute(procedure_query)
-                print("Stored procedure 'GetCourseContentDetailsByCategory' created successfully.")
-            else:
-                print("Stored procedure 'GetCourseContentDetailsByCategory' already exists.")
+            cursor.execute("DROP PROCEDURE IF EXISTS GetCourseContentDetailsByCategory")
+            cursor.execute(procedure_query)
+            print("Stored procedure 'GetCourseContentDetailsByCategory' created successfully.")
             connection.commit()
         except mysql.connector.Error as err:
             print(f"Error: {err}")
