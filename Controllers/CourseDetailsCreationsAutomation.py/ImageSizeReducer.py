@@ -11,6 +11,10 @@ def reduce_image_size(folder_path, output_size):
 	for filename in os.listdir(folder_path):
 		if filename.lower().endswith((".jpg", ".jpeg", ".png")):
 			file_path = os.path.join(folder_path, filename)
+			# Skip if original file size is under 50KB
+			if os.path.getsize(file_path) <= 50 * 1024:
+				print(f"Skipping {filename}: already under 50KB")
+				continue
 			try:
 				with Image.open(file_path) as img:
 					img = img.convert("RGB")
