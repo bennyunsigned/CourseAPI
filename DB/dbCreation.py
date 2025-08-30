@@ -571,6 +571,87 @@ def insert_category_master_defaults():
     """
     execute_query(category_insert_query, "Default categories inserted into 'CategoryMaster'.")
 
+def create_user_course_purchase_table():
+    """Create the UserCoursePurchase table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS UserCoursePurchase (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        course_id INT NOT NULL,
+        payment_id VARCHAR(255) NOT NULL,
+        purchase_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES Users(id),
+        FOREIGN KEY (course_id) REFERENCES CourseMaster(CourseId)
+    );
+    """
+    execute_query(table_query, "Table 'UserCoursePurchase' ensured to exist.")
+
+def create_user_subscription_table():
+    """Create the UserSubscription table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS UserSubscription (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        subscription_type VARCHAR(100) NOT NULL,
+        start_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        end_date DATETIME,
+        payment_id VARCHAR(255) NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES Users(id)
+    );
+    """
+    execute_query(table_query, "Table 'UserSubscription' ensured to exist.")
+    
+def ensure_user_purchase_and_subscription_details_procedure_exists():
+    """
+    Ensure the stored procedure exists to fetch all subscription and purchased course details for a user.
+    """
+    procedure_query = """
+    CREATE PROCEDURE GetUserPurchaseAndSubscriptionDetails(IN p_user_id INT)
+    BEGIN
+        SELECT s.subscription_type, s.start_date, s.end_date, s.payment_id
+        FROM UserSubscription s
+        WHERE s.user_id = p_user_id;
+
+        SELECT c.CourseId, c.CourseName, c.CourseDescription, p.purchase_date, p.payment_id
+        FROM UserCoursePurchase p
+        JOIN CourseMaster c ON p.course_id = c.CourseId
+        WHERE p.user_id = p_user_id;
+    END;
+    """
+    connection = get_db_connection()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            cursor.execute("SHOW PROCEDURE STATUS WHERE Name = 'GetUserPurchaseAndSubscriptionDetails'")
+            result = cursor.fetchone()
+            if not result:
+                cursor.execute(procedure_query)
+                print("Stored procedure 'GetUserPurchaseAndSubscriptionDetails' created successfully.")
+            else:
+                print("Stored procedure 'GetUserPurchaseAndSubscriptionDetails' already exists.")
+            connection.commit()
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+        finally:
+            cursor.close()
+            connection.close()
+
+def create_payment_table():
+    """Create the Payment table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS Payment (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        payment_id VARCHAR(255) NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        payment_type VARCHAR(50) NOT NULL,
+        status VARCHAR(50) NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES Users(id)
+    );
+    """
+    execute_query(table_query, "Table 'Payment' ensured to exist.")
+
 def execute_query(query, success_message):
     """Execute a given query and print a success message."""
     connection = get_db_connection()
@@ -602,6 +683,11 @@ if __name__ == "__main__":
     insert_admin_user()    
     create_module_video_table()
     create_course_content_operations_table()
+    create_user_course_purchase_table()
+    create_user_subscription_table()
+    ensure_user_purchase_and_subscription_details_procedure_exists()
+    create_payment_table()
+    
     
     # create_testimonial_table()
     # create_email_log_table()

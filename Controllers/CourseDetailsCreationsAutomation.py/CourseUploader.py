@@ -29,7 +29,7 @@ MYSQL_CONFIG = {
     'database': os.environ.get('DB_NAME', 'course_db')
 }
 TABLE_NAME = 'course_content_operations'
-ITEM_IDENTIFIER = "4.python-hacking-complete-beginner-to-advanced-course"  # Replace as needed
+ITEM_IDENTIFIER = "58.useuse-reducerwithuse-effecttofetchthedata"  # Replace as needed
 
 STATEMENTS_DIR = r"c:\Course_Module_Video_Statements"
 os.makedirs(STATEMENTS_DIR, exist_ok=True)
