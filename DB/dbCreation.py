@@ -636,14 +636,14 @@ if __name__ == "__main__":
     # create_course_module_table()
     # ensure_userCreation_stored_procedure_exists()
     # ensure_getCourseContentDetails_procedure_exists()  # <-- Add this line
-     ensure_getCourseContentDetailsByCategory_procedure_exists()  # <-- Add this line
+    #ensure_getCourseContentDetailsByCategory_procedure_exists()  # <-- Add this line
     # insert_admin_user()    
     # create_module_video_table()
     # create_course_content_operations_table()
-    # create_user_course_purchase_table()
-    # create_user_subscription_table()
-    # ensure_user_purchase_and_subscription_details_procedure_exists()
-    # create_payment_table()
+     create_user_course_purchase_table()
+     create_user_subscription_table()
+     ensure_user_purchase_and_subscription_details_procedure_exists()
+     create_payment_table()
     
     
     # create_testimonial_table()
