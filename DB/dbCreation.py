@@ -99,6 +99,7 @@ def create_course_master_table():
         IsBestSeller BOOLEAN DEFAULT FALSE,
         VideoPath VARCHAR(500),
         IsPublic BOOLEAN DEFAULT FALSE,
+        CourseDuration INT DEFAULT 0,
         CreatedBy VARCHAR(255),
         CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         UpdatedBy VARCHAR(255),
@@ -419,21 +420,9 @@ def ensure_getCourseContentDetailsByCategory_procedure_exists():
     """Ensure the GetCourseContentDetailsByCategory stored procedure exists in the database."""
     procedure_query = """
     CREATE DEFINER=`root`@`localhost` PROCEDURE GetCourseContentDetailsByCategory(
-        IN p_CategoryId INT,
-        IN p_Limit INT,
-        IN p_Offset INT
+        IN p_CategoryId INT
     )
     BEGIN
-        -- Step 1: Get limited CourseIds
-        CREATE TEMPORARY TABLE TempCourseIds
-        SELECT CourseId
-        FROM CourseMaster
-        WHERE Status = 'Active'
-          AND (p_CategoryId = 0 OR CategoryId = p_CategoryId)
-        ORDER BY CourseId
-        LIMIT p_Limit OFFSET p_Offset;
-
-        -- Step 2: Join with full content
         SELECT
             crs.CourseId,
             crs.CourseName,
@@ -449,46 +438,14 @@ def ensure_getCourseContentDetailsByCategory_procedure_exists():
             crs.IsBestSeller,
             crs.VideoPath,
             crs.IsPublic,
-
+            crs.CourseDuration,
             cat.CategoryId,
-            cat.CategoryName,
-
-            modu.ModuleId,
-            modu.ModuleName,
-            modu.ModuleDescription,
-            modu.SequenceNo AS ModuleSequenceNo,
-
-            vid.VideoId,
-            vid.VideoTitle,
-            vid.VideoUrl,
-            vid.DurationInSeconds,
-            vid.SequenceNo AS VideoSequenceNo,
-
-            mdur.TotalDurationPerModule,
-            cdur.TotalDurationPerCourse
-
-        FROM TempCourseIds tmp
-        INNER JOIN CourseMaster AS crs ON tmp.CourseId = crs.CourseId
-        INNER JOIN CourseModule AS modu ON crs.CourseId = modu.CourseId AND modu.Status = 'Active'
-        INNER JOIN ModuleVideo AS vid ON modu.ModuleId = vid.ModuleId AND vid.Status = 'Active'
+            cat.CategoryName
+        FROM CourseMaster AS crs
         INNER JOIN CategoryMaster AS cat ON crs.CategoryId = cat.CategoryId
-
-        LEFT JOIN (
-            SELECT ModuleId, SUM(DurationInSeconds) AS TotalDurationPerModule
-            FROM ModuleVideo
-            GROUP BY ModuleId
-        ) AS mdur ON modu.ModuleId = mdur.ModuleId
-
-        LEFT JOIN (
-            SELECT cm.CourseId, SUM(mv.DurationInSeconds) AS TotalDurationPerCourse
-            FROM CourseModule cm
-            JOIN ModuleVideo mv ON cm.ModuleId = mv.ModuleId
-            GROUP BY cm.CourseId
-        ) AS cdur ON crs.CourseId = cdur.CourseId
-
-        ORDER BY crs.CourseId, modu.SequenceNo, vid.SequenceNo;
-
-        DROP TEMPORARY TABLE TempCourseIds;
+        WHERE crs.Status = 'Active'
+          AND (p_CategoryId = 0 OR crs.CategoryId = p_CategoryId)
+        ORDER BY crs.CourseId;
     END
     """
     connection = get_db_connection()
@@ -672,21 +629,21 @@ def execute_query(query, success_message):
 
 
 if __name__ == "__main__":
-    create_users_table()
-    create_category_master_table()
-    insert_category_master_defaults()
-    create_course_master_table()
-    create_course_module_table()
-    ensure_userCreation_stored_procedure_exists()
-    ensure_getCourseContentDetails_procedure_exists()  # <-- Add this line
-    ensure_getCourseContentDetailsByCategory_procedure_exists()  # <-- Add this line
-    insert_admin_user()    
-    create_module_video_table()
-    create_course_content_operations_table()
-    create_user_course_purchase_table()
-    create_user_subscription_table()
-    ensure_user_purchase_and_subscription_details_procedure_exists()
-    create_payment_table()
+    # create_users_table()
+    # create_category_master_table()
+    # insert_category_master_defaults()
+    # create_course_master_table()
+    # create_course_module_table()
+    # ensure_userCreation_stored_procedure_exists()
+    # ensure_getCourseContentDetails_procedure_exists()  # <-- Add this line
+    #ensure_getCourseContentDetailsByCategory_procedure_exists()  # <-- Add this line
+    # insert_admin_user()    
+    # create_module_video_table()
+    # create_course_content_operations_table()
+     create_user_course_purchase_table()
+     create_user_subscription_table()
+     ensure_user_purchase_and_subscription_details_procedure_exists()
+     create_payment_table()
     
     
     # create_testimonial_table()
