@@ -28,8 +28,11 @@ MYSQL_CONFIG = {
     'password': os.environ.get('DB_PASSWORD', ''),
     'database': os.environ.get('DB_NAME', 'course_db')
 }
+
 TABLE_NAME = 'course_content_operations'
-ITEM_IDENTIFIER = "58.useuse-reducerwithuse-effecttofetchthedata"  # Replace as needed
+
+# Prompt user for ITEM_IDENTIFIER
+ITEM_IDENTIFIER = input("Enter ITEM_IDENTIFIER: ")
 
 STATEMENTS_DIR = r"c:\Course_Module_Video_Statements"
 os.makedirs(STATEMENTS_DIR, exist_ok=True)
@@ -1375,8 +1378,8 @@ if __name__ == "__main__":
             sys.exit(1)
     
     try:
-        # print("\n📋 Step 1: Processing videos and saving to database...")
-        # process_and_save_to_db(course_id)
+        print("\n📋 Step 1: Processing videos and saving to database...")
+        process_and_save_to_db(course_id)
         
         print("\n📋 Step 2: Pushing data to production via API...")
         push_to_prod_from_db(course_id)
