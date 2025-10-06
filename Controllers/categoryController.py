@@ -14,7 +14,7 @@ def create_category_endpoint(category_data: CategoryRequest, claims: dict = Depe
     return create_category(category_data, user_id)
 
 @category_router.get("/", response_model=list[CategoryResponse])
-def get_all_category_endpoint(claims: dict = Depends(authenticate_request)):
+def get_all_category_endpoint():
     return get_all_categories()
 
 @category_router.get("/{category_id}", response_model=CategoryResponse)

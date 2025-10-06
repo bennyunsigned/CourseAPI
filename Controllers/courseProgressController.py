@@ -35,9 +35,23 @@ def _fetch_courses_by_category_from_db(category_id: int) -> List[dict]:
         for row in rows:
             banner_path = row.get("BannerImage")
             base64_banner = None
-            if banner_path and os.path.isfile("." + banner_path):
-                with open("." + banner_path, "rb") as img_file:
-                    base64_banner = "data:image/jpeg;base64," + base64.b64encode(img_file.read()).decode("utf-8")
+            # If a base file URL/path is configured via env, return constructed file path instead of base64
+            base_file_url = os.getenv("BASE_FILE_URL") or os.getenv("BASE_FILE_PATH")
+            if base_file_url and banner_path:
+                # banner_path may already include a leading slash; join carefully
+                # Ensure no double slashes when concatenating
+                if base_file_url.endswith('/') and banner_path.startswith('/'):
+                    image_url = base_file_url[:-1] + banner_path
+                elif not base_file_url.endswith('/') and not banner_path.startswith('/'):
+                    image_url = base_file_url + '/' + banner_path
+                else:
+                    image_url = base_file_url + banner_path
+                base64_banner = image_url
+            else:
+                # Fallback to previous behavior: embed base64 if file exists on disk
+                if banner_path and os.path.isfile("." + banner_path):
+                    with open("." + banner_path, "rb") as img_file:
+                        base64_banner = "data:image/jpeg;base64," + base64.b64encode(img_file.read()).decode("utf-8")
             course_data = {
                 "CourseId": row["CourseId"],
                 "CourseName": row["CourseName"],
