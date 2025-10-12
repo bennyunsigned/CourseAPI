@@ -23,6 +23,9 @@ from Controllers.categoryController import category_router
 from Controllers.courseProgressController import course_progress_router
 from Controllers.courseProgressController import start_cache_refresh_thread, stop_cache_refresh_thread
 from Controllers.instamojoController import router as instamojo_router
+from Controllers.cartController import cart_router
+from Controllers.emailController import router as email_router, start_email_sender, stop_email_sender
+
 
 # ✅ FastAPI app
 app = FastAPI(
@@ -90,6 +93,8 @@ app.include_router(util_router, prefix="/api/media", tags=["Video"])
 app.include_router(category_router, prefix="/api/category", tags=["Category"])
 app.include_router(course_progress_router, prefix="/api/courseProgress", tags=["CourseProgress"])
 app.include_router(instamojo_router, prefix="/api", tags=["Instamojo"])
+app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
+app.include_router(email_router, prefix="/api/email", tags=["Email"])
 
 # Serve uploaded files from the `Uploads` directory at the `/uploads` URL path.
 # Use an absolute path to the folder so mounting works regardless of CWD.
@@ -110,11 +115,14 @@ if uploads_dir:
 def _start_background_jobs():
     # start cache refresher every 15 minutes
     start_cache_refresh_thread(interval_seconds=15 * 60)
+    # start email sender thread (interval from env, default 60s)
+    start_email_sender(interval_seconds=int(os.getenv('EMAIL_SENDER_INTERVAL', '60')))
 
 
 @app.on_event("shutdown")
 def _stop_background_jobs():
     stop_cache_refresh_thread()
+    stop_email_sender()
 
 # ✅ Root Endpoint
 @app.get("/", response_class=HTMLResponse)

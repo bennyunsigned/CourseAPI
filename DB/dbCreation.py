@@ -179,6 +179,24 @@ def create_course_content_operations_table():
     """
     execute_query(table_query, "Table 'course_content_operations' ensured to exist.")
 
+def create_email_master_table():
+    """Create the EmailMaster table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS EmailMaster (
+        EmailId INT AUTO_INCREMENT PRIMARY KEY,
+        recipient_email VARCHAR(255) NOT NULL,
+        subject VARCHAR(500),
+        body TEXT,
+        attachments TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        status ENUM('Active','Sent','Failed') DEFAULT 'Active',
+        attempts INT DEFAULT 0,
+        last_attempt_at DATETIME
+    );
+    """
+    execute_query(table_query, "Table 'EmailMaster' ensured to exist.")
+
 def create_testimonial_table():
     """Create the Testimonial table if it does not exist."""
     table_query = """
@@ -200,44 +218,6 @@ def create_testimonial_table():
     """
     execute_query(table_query, "Table 'Testimonial' ensured to exist.")
 
-def create_email_log_table():
-    """Create the EmailLog table if it does not exist."""
-    table_query = """
-    CREATE TABLE IF NOT EXISTS EmailLog (
-        EmailLogId INT AUTO_INCREMENT PRIMARY KEY,
-        UserId INT,
-        Email VARCHAR(255),
-        Subject VARCHAR(255),
-        Body TEXT,
-        AttachmentPath VARCHAR(500),        
-        CreatedBy VARCHAR(255),
-        CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UpdatedBy VARCHAR(255),
-        UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        Status ENUM('Sent', 'Failed') DEFAULT 'Sent',
-        FOREIGN KEY (UserId) REFERENCES Users(id) ON DELETE SET NULL
-    );
-    """
-    execute_query(table_query, "Table 'EmailLog' ensured to exist.")
-
-def create_sms_log_table():
-    """Create the SMSLog table if it does not exist."""
-    table_query = """
-    CREATE TABLE IF NOT EXISTS SMSLog (
-        SMSLogId INT AUTO_INCREMENT PRIMARY KEY,
-        UserId INT,
-        Phone VARCHAR(15),
-        Message TEXT,
-        AttachmentPath VARCHAR(500),
-        CreatedBy VARCHAR(255),
-        CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UpdatedBy VARCHAR(255),
-        UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,        
-        Status ENUM('Sent', 'Failed') DEFAULT 'Sent',        
-        FOREIGN KEY (UserId) REFERENCES Users(id) ON DELETE SET NULL
-    );
-    """
-    execute_query(table_query, "Table 'SMSLog' ensured to exist.")
 
 def create_payment_table():
     """Create the Payment table if it does not exist."""
@@ -260,6 +240,66 @@ def create_payment_table():
     );
     """
     execute_query(table_query, "Table 'Payment' ensured to exist.")
+
+def create_cart_table():
+    """Create the Cart table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS Cart (
+        CartId INT AUTO_INCREMENT PRIMARY KEY,
+        UserId INT NOT NULL,
+        CourseId INT NOT NULL,
+        CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        Status VARCHAR(50) DEFAULT 'Active',
+        FOREIGN KEY (UserId) REFERENCES Users(id) ON DELETE CASCADE,
+        FOREIGN KEY (CourseId) REFERENCES CourseMaster(CourseId) ON DELETE CASCADE
+    );
+    """
+    execute_query(table_query, "Table 'Cart' ensured to exist.")
+
+
+def ensure_getCartProductsByUser_procedure_exists():
+    """Ensure the GetCartProductsByUser stored procedure exists in the database."""
+    procedure_query = """
+    CREATE DEFINER=`root`@`localhost` PROCEDURE GetCartProductsByUser(
+        IN p_user_id INT
+    )
+    BEGIN
+        SELECT
+            c.CartId,
+            c.UserId,
+            c.CourseId,
+            cm.CourseName,
+            cm.BannerImage,
+            cm.ActualPrice,
+            cm.DiscountedPrice,
+            c.CreatedAt,
+            c.Status
+        FROM Cart c
+        INNER JOIN CourseMaster cm ON c.CourseId = cm.CourseId
+        WHERE c.UserId = p_user_id
+          AND c.Status = 'Active'
+        ORDER BY c.CreatedAt DESC;
+    END;
+    """
+    connection = get_db_connection()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            cursor.execute("SHOW PROCEDURE STATUS WHERE Name = 'GetCartProductsByUser'")
+            result = cursor.fetchone()
+            if not result:
+                cursor.execute("DROP PROCEDURE IF EXISTS GetCartProductsByUser")
+                cursor.execute(procedure_query)
+                print("Stored procedure 'GetCartProductsByUser' created successfully.")
+            else:
+                print("Stored procedure 'GetCartProductsByUser' already exists.")
+            connection.commit()
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+        finally:
+            cursor.close()
+            connection.close()
 
 def create_bundle_table():
     """Create the Bundle table if it does not exist."""
@@ -626,8 +666,6 @@ def execute_query(query, success_message):
 
 
 
-
-
 if __name__ == "__main__":
     # create_users_table()
     # create_category_master_table()
@@ -640,20 +678,17 @@ if __name__ == "__main__":
     # insert_admin_user()    
     # create_module_video_table()
     # create_course_content_operations_table()
+    
+    
      create_user_course_purchase_table()
      create_user_subscription_table()
      ensure_user_purchase_and_subscription_details_procedure_exists()
      create_payment_table()
+     create_cart_table()
+     ensure_getCartProductsByUser_procedure_exists()
+     create_email_master_table()
     
-    
-    # create_testimonial_table()
-    # create_email_log_table()
-    # create_sms_log_table()
-    # create_payment_table()
-    # create_bundle_table()
-    # create_bundle_courses_table()
-    # create_subscription_plan_table()
-    # create_user_subscription_table()
+    # create_testimonial_table()    
     # insert_default_data()
 
 

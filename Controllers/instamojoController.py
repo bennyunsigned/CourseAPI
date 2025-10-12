@@ -6,7 +6,11 @@ from instamojo_wrapper import Instamojo
 import os
 import logging
 import mysql.connector
+from datetime import datetime, timedelta
+import calendar
 from DB.db import get_db_connection
+from Services import emailService
+from Utils.ExceptionHandler import log_exception_to_file
 
 router = APIRouter(prefix="/instamojo", tags=["Instamojo"])
 
@@ -107,6 +111,27 @@ def log_payment_event(payment_id: str | None, level: str, step: str, message: st
             pass
 
 
+def _get_user_email(user_id: int) -> str:
+    """Return user's email from Users table or empty string if not found."""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return ""
+        cur = conn.cursor()
+        cur.execute("SELECT email FROM Users WHERE id=%s", (user_id,))
+        r = cur.fetchone()
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+        if r and len(r) > 0:
+            return r[0] or ""
+    except Exception:
+        pass
+    return ""
+
+
 class PaymentRequest(BaseModel):
     amount: float
     purpose: str
@@ -118,7 +143,6 @@ class PaymentRequest(BaseModel):
     user_id: int
     course_id: int = None # Only for individual purchase
     subscription_type: str = None # Only for subscription
-
 
 
 
@@ -177,11 +201,16 @@ async def create_payment(data: PaymentRequest):
     except Exception as e:
         logger.exception("Error creating instamojo payment")
         log_payment_event(None, 'ERROR', 'create_payment.exception', str(e))
+        # write full traceback to Exception file and re-raise
+        try:
+            log_exception_to_file(e, context='create_payment')
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/payment/confirm", status_code=status.HTTP_200_OK)
-async def confirm_payment(payment_id: str = Body(...), payment_type: str = Body(...), user_id: int = Body(...), course_id: int = Body(None), subscription_type: str = Body(None), amount: float = Body(None)):
+async def confirm_payment(payment_id: str = Body(...), payment_type: str = Body(...), user_id: int = Body(...), course_id: str = Body(None), subscription_type: str = Body(None), amount: float = Body(None)):
     """
     Call this endpoint after payment is successful (webhook or redirect handler).
     Also updates Payment table status.
@@ -237,6 +266,29 @@ async def confirm_payment(payment_id: str = Body(...), payment_type: str = Body(
             try:
                 cursor.execute("UPDATE Payment SET status=%s WHERE payment_id=%s", (str(status_str), payment_id))
                 connection.commit()
+                # queue failure email
+                try:
+                    subject = f"[Vidyaroop] Payment Failed — {payment_id}"
+                    # HTML body (no user id)
+                    body = f"""
+                    <html>
+                      <body style="font-family: Arial, sans-serif; color: #333;">
+                        <div style="max-width:600px;margin:0 auto;padding:20px;border:1px solid #eaeaea;border-radius:8px;">
+                          <h2 style="color:#d9534f;">Payment Failed</h2>
+                          <p>We were unable to process payment <strong>{payment_id}</strong>.</p>
+                          <p>Status: <strong>{status_str}</strong></p>
+                          <p>If you need help, visit <a href="https://vidyaroop.com">Vidyaroop.com</a> or reply to this email.</p>
+                          <hr>
+                          <p style="font-size:12px;color:#888;">&copy; Vidyaroop.com</p>
+                        </div>
+                      </body>
+                    </html>
+                    """
+                    recipient = _get_user_email(user_id) or ''
+                    emailService.insert_email(recipient, subject, body, None)
+                except Exception:
+                    # don't block payment flow on email errors
+                    pass
             finally:
                 try:
                     cursor.close()
@@ -251,19 +303,112 @@ async def confirm_payment(payment_id: str = Body(...), payment_type: str = Body(
             cursor.execute("UPDATE Payment SET status='success' WHERE payment_id=%s", (payment_id,))
             log_payment_event(payment_id, 'INFO', 'confirm_payment.marked_success', 'Payment status set to success')
             if payment_type == 'individual' and course_id:
+                # course_id may be a single integer or a comma-separated string of IDs
+                # normalize to list of ints
+                course_ids = []
+                # Try parameter first
+                try:
+                    if isinstance(course_id, str) and ',' in course_id:
+                        parts = [p.strip() for p in course_id.split(',') if p.strip()]
+                        for p in parts:
+                            try:
+                                course_ids.append(int(p))
+                            except Exception:
+                                logger.warning("Skipping invalid course id part: %s", p)
+                    else:
+                        # single value - may be string of int or int
+                        course_ids.append(int(course_id))
+                except Exception:
+                    # fallback: try to read from payment intent row (fetched earlier)
+                    try:
+                        cursor_fetch = connection.cursor(dictionary=True)
+                        cursor_fetch.execute("SELECT course_id FROM Payment WHERE payment_id=%s", (payment_id,))
+                        intent_row = cursor_fetch.fetchone()
+                        cursor_fetch.close()
+                        if intent_row and intent_row.get('course_id') is not None:
+                            raw = intent_row.get('course_id')
+                            if isinstance(raw, str) and ',' in raw:
+                                for p in [x.strip() for x in raw.split(',') if x.strip()]:
+                                    try:
+                                        course_ids.append(int(p))
+                                    except Exception:
+                                        logger.warning("Skipping invalid course id in intent: %s", p)
+                            else:
+                                try:
+                                    course_ids.append(int(raw))
+                                except Exception:
+                                    pass
+                    except Exception:
+                        logger.exception("Failed to fetch course_id from Payment intent as fallback")
+
+                if not course_ids:
+                    raise HTTPException(status_code=400, detail="No valid course_id provided for individual purchase")
+
                 query = """
                     INSERT INTO UserCoursePurchase (user_id, course_id, payment_id)
                     VALUES (%s, %s, %s)
                 """
-                cursor.execute(query, (user_id, course_id, payment_id))
-                log_payment_event(payment_id, 'INFO', 'confirm_payment.purchase_insert', f'Inserted UserCoursePurchase for user {user_id} course {course_id}')
+                exists_query = "SELECT COUNT(*) FROM UserCoursePurchase WHERE user_id=%s AND course_id=%s"
+                delete_cart_query = "UPDATE Cart SET Status='Deleted', UpdatedAt=NOW() WHERE UserId=%s AND CourseId=%s AND Status='Active'"
+                for cid in course_ids:
+                    # Skip duplicate purchases
+                    try:
+                        cursor.execute(exists_query, (user_id, cid))
+                        exists_cnt = cursor.fetchone()[0]
+                    except Exception:
+                        exists_cnt = 0
+
+                    if exists_cnt and exists_cnt > 0:
+                        log_payment_event(payment_id, 'INFO', 'confirm_payment.duplicate_purchase', f'Skipped duplicate purchase for user {user_id} course {cid}')
+                        continue
+
+                    # Insert purchase row
+                    cursor.execute(query, (user_id, cid, payment_id))
+                    log_payment_event(payment_id, 'INFO', 'confirm_payment.purchase_insert', f'Inserted UserCoursePurchase for user {user_id} course {cid}')
+
+                    # Remove from cart (soft delete)
+                    try:
+                        cursor.execute(delete_cart_query, (user_id, cid))
+                        log_payment_event(payment_id, 'INFO', 'confirm_payment.cart_removed', f'Removed cart item for user {user_id} course {cid}')
+                    except Exception as e:
+                        logger.exception("Failed to remove from cart for user %s course %s: %s", user_id, cid, str(e))
             elif payment_type == 'subscription' and subscription_type:
+                # Calculate end_date based on subscription_type
+                def add_months(dt: datetime, months: int) -> datetime:
+                    month = dt.month - 1 + months
+                    year = dt.year + month // 12
+                    month = month % 12 + 1
+                    day = min(dt.day, calendar.monthrange(year, month)[1])
+                    return dt.replace(year=year, month=month, day=day)
+
+                def add_years(dt: datetime, years: int) -> datetime:
+                    try:
+                        return dt.replace(year=dt.year + years)
+                    except ValueError:
+                        # handle Feb 29 -> Feb 28 on non-leap years
+                        return dt.replace(year=dt.year + years, day=28)
+
+                now = datetime.now()
+                end_date = None
+                try:
+                    if subscription_type == 'S06':
+                        end_date = add_months(now, 6)
+                    elif subscription_type == 'S12':
+                        end_date = add_months(now, 12)
+                    elif subscription_type == 'LFT':
+                        end_date = add_years(now, 5)
+                    else:
+                        end_date = now + timedelta(days=30)
+                except Exception:
+                    # fallback to 30 days if any calculation fails
+                    end_date = now + timedelta(days=30)
+
                 query = """
-                    INSERT INTO UserSubscription (user_id, subscription_type, payment_id)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO UserSubscription (user_id, subscription_type, payment_id, end_date)
+                    VALUES (%s, %s, %s, %s)
                 """
-                cursor.execute(query, (user_id, subscription_type, payment_id))
-                log_payment_event(payment_id, 'INFO', 'confirm_payment.subscription_insert', f'Inserted UserSubscription for user {user_id} subscription {subscription_type}')
+                cursor.execute(query, (user_id, subscription_type, payment_id, end_date))
+                log_payment_event(payment_id, 'INFO', 'confirm_payment.subscription_insert', f'Inserted UserSubscription for user {user_id} subscription {subscription_type} end_date={end_date}')
             else:
                 raise HTTPException(status_code=400, detail="Invalid payment type or missing data.")
             connection.commit()
@@ -272,7 +417,32 @@ async def confirm_payment(payment_id: str = Body(...), payment_type: str = Body(
                 cursor.close()
             except Exception:
                 pass
-
+        # queue success email after purchases/subscriptions inserted
+        try:
+            subject = f"[Vidyaroop] Payment Successful — {payment_id}"
+            # HTML body (no user id)
+            try:
+                amount_str = f"Amount: {amount}" if amount is not None else ""
+            except Exception:
+                amount_str = ""
+            body = f"""
+            <html>
+              <body style="font-family: Arial, sans-serif; color: #333;">
+                <div style="max-width:600px;margin:0 auto;padding:20px;border:1px solid #eaeaea;border-radius:8px;">
+                  <h2 style="color:#28a745;">Payment Successful</h2>
+                  <p>Your payment <strong>{payment_id}</strong> has been processed successfully.</p>
+                  <p>{amount_str}</p>
+                  <p>Thank you for your purchase. You can access your content at <a href="https://vidyaroop.com">Vidyaroop.com</a>.</p>
+                  <hr>
+                  <p style="font-size:12px;color:#888;">&copy; Vidyaroop.com</p>
+                </div>
+              </body>
+            </html>
+            """
+            recipient = _get_user_email(user_id) or ''
+            emailService.insert_email(recipient, subject, body, None)
+        except Exception:
+            pass
         log_payment_event(payment_id, 'INFO', 'confirm_payment.completed', 'Confirm payment completed successfully')
         return {"success": True}
     except HTTPException:
@@ -280,6 +450,10 @@ async def confirm_payment(payment_id: str = Body(...), payment_type: str = Body(
     except Exception as e:
         logger.exception("Error confirming payment")
         log_payment_event(payment_id, 'ERROR', 'confirm_payment.exception', str(e))
+        try:
+            log_exception_to_file(e, context='confirm_payment')
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         if connection:

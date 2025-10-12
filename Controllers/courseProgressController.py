@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from DB.db import get_db_connection
 from Utils.JWT import authenticate_request
+from datetime import datetime
 import base64
 import os
+from datetime import datetime
 from Models.publicCourseContentModel import CourseContentModel, ModuleModel, VideoModel
 import threading
 import time
@@ -128,6 +130,7 @@ def stop_cache_refresh_thread() -> None:
         _cache_thread.join(timeout=5)
         _cache_thread = None
         _cache_stop_event = None
+
 
 @course_progress_router.get("/course-progress/")
 def get_course_progress(
@@ -281,6 +284,75 @@ def get_max_video_id():
         cursor.execute("SELECT MAX(VideoId) AS MaxVideoId FROM ModuleVideo")
         result = cursor.fetchone()
         return {"MaxVideoId": result["MaxVideoId"] if result["MaxVideoId"] is not None else 0}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@course_progress_router.get("/user/has-active-subscription/")
+def has_active_subscription(claims: dict = Depends(authenticate_request)):
+    """
+    Return whether the authenticated user has an active subscription.
+    Checks latest UserSubscription for the user ordered by CreatedAt desc and verifies end_date > now().
+    """
+    user_id = claims.get('id')
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid user claims")
+    connection = get_db_connection()
+    cursor = None
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT subscription_type, end_date FROM UserSubscription WHERE user_id=%s ORDER BY start_date DESC LIMIT 1",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        if not row or not row.get('end_date'):
+            return {"has_active_subscription": False}
+        # end_date may be returned as datetime or string; compare accordingly
+        end_date = row.get('end_date')
+        if isinstance(end_date, str):
+            try:
+                end_date = datetime.fromisoformat(end_date)
+            except Exception:
+                # try parsing common formats
+                try:
+                    end_date = datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    return {"has_active_subscription": False}
+
+        now = datetime.now()
+        return {"has_active_subscription": end_date > now}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@course_progress_router.get("/user/purchased-courses/")
+def get_purchased_courses(claims: dict = Depends(authenticate_request)):
+    """
+    Return distinct purchased course IDs for the authenticated user from UserCoursePurchase.
+    """
+    user_id = claims.get('id')
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid user claims")
+    connection = get_db_connection()
+    cursor = None
+    try:
+        cursor = connection.cursor()
+        cursor.execute("SELECT DISTINCT course_id FROM UserCoursePurchase WHERE user_id=%s", (user_id,))
+        rows = cursor.fetchall()
+        # rows may be list of tuples
+        course_ids = [r[0] for r in rows if r and len(r) > 0]
+        return {"purchased_courses": course_ids}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
