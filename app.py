@@ -25,6 +25,8 @@ from Controllers.courseProgressController import start_cache_refresh_thread, sto
 from Controllers.instamojoController import router as instamojo_router
 from Controllers.cartController import cart_router
 from Controllers.emailController import router as email_router, start_email_sender, stop_email_sender
+from Controllers.helpdeskController import helpdesk_router
+from Controllers.reportController import report_router
 
 
 # ✅ FastAPI app
@@ -95,6 +97,8 @@ app.include_router(course_progress_router, prefix="/api/courseProgress", tags=["
 app.include_router(instamojo_router, prefix="/api", tags=["Instamojo"])
 app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
 app.include_router(email_router, prefix="/api/email", tags=["Email"])
+app.include_router(helpdesk_router, prefix="/api/helpdesk", tags=["Helpdesk"])
+app.include_router(report_router, prefix="/api/report", tags=["Report"])
 
 # Serve uploaded files from the `Uploads` directory at the `/uploads` URL path.
 # Use an absolute path to the folder so mounting works regardless of CWD.

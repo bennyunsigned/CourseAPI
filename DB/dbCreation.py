@@ -665,6 +665,62 @@ def execute_query(query, success_message):
             connection.close()
 
 
+def create_helpdesk_tables():
+    """Create tickets, ticket_messages and ticket_attachments tables if they do not exist."""
+    tickets_q = """
+    CREATE TABLE IF NOT EXISTS tickets (
+        ticket_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        description TEXT,
+        priority ENUM('low','medium','high','urgent') DEFAULT 'medium',
+        status ENUM('open','in_progress','resolved','closed') DEFAULT 'open',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        resolved_at DATETIME NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+    execute_query(tickets_q, "Table 'tickets' ensured to exist.")
+
+    ticket_messages_q = """
+    CREATE TABLE IF NOT EXISTS ticket_messages (
+        message_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        ticket_id BIGINT NOT NULL,
+        user_id INT NOT NULL,
+        message TEXT NOT NULL,
+        -- messages now store user_id of the sender (INT to match Users.id)
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (ticket_id) REFERENCES tickets(ticket_id)
+            ON DELETE CASCADE ON UPDATE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES Users(id)
+            ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+    execute_query(ticket_messages_q, "Table 'ticket_messages' ensured to exist.")
+
+    ticket_attachments_q = """
+    CREATE TABLE IF NOT EXISTS ticket_attachments (
+        attachment_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        ticket_id BIGINT NOT NULL,
+        file_name VARCHAR(255),
+        file_url VARCHAR(255),
+        file_type VARCHAR(50),
+        uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (ticket_id) REFERENCES tickets(ticket_id)
+            ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+    # Enforce that attachments are images (file_type LIKE 'image/%'). Note: older MySQL versions may ignore CHECK.
+    ticket_attachments_q_with_check = ticket_attachments_q.rstrip(';') + \
+        " CONSTRAINT chk_ticket_attachment_is_image CHECK (file_type LIKE 'image/%'));"
+    # Use the CHECK-enabled query when possible; fallback to the simpler create if it fails at runtime.
+    try:
+        execute_query(ticket_attachments_q_with_check, "Table 'ticket_attachments' ensured to exist with image-only constraint.")
+    except Exception:
+        # Fallback: create without the CHECK (some MySQL setups ignore or disallow it)
+        execute_query(ticket_attachments_q, "Table 'ticket_attachments' ensured to exist (no CHECK applied).")
+
+
 
 if __name__ == "__main__":
     # create_users_table()
@@ -674,19 +730,20 @@ if __name__ == "__main__":
     # create_course_module_table()
     # ensure_userCreation_stored_procedure_exists()
     # ensure_getCourseContentDetails_procedure_exists()  # <-- Add this line
-    #ensure_getCourseContentDetailsByCategory_procedure_exists()  # <-- Add this line
+    # ensure_getCourseContentDetailsByCategory_procedure_exists()  # <-- Add this line
     # insert_admin_user()    
     # create_module_video_table()
     # create_course_content_operations_table()
     
     
-     create_user_course_purchase_table()
-     create_user_subscription_table()
-     ensure_user_purchase_and_subscription_details_procedure_exists()
-     create_payment_table()
-     create_cart_table()
-     ensure_getCartProductsByUser_procedure_exists()
-     create_email_master_table()
+    # create_user_course_purchase_table()
+    # create_user_subscription_table()
+    # ensure_user_purchase_and_subscription_details_procedure_exists()
+    # create_payment_table()
+    # create_cart_table()
+    # ensure_getCartProductsByUser_procedure_exists()
+    # create_email_master_table()    
+    create_helpdesk_tables()
     
     # create_testimonial_table()    
     # insert_default_data()
