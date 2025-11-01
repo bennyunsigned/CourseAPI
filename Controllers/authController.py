@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
-from Models.authModel import UserRegistration, UserResponse, UserLogin, LoginResponse
-from Services.authService import register_user, login_user
+from Models.authModel import UserRegistration, UserResponse, UserLogin, LoginResponse, ChangePasswordRequest, MessageResponse
+from Services.authService import register_user, login_user, change_user_password
 from Utils.JWT import authenticate_request, create_jwt_token
 from DB.db import get_db_connection
 import secrets
@@ -46,6 +46,30 @@ def login(user: UserLogin):
         return LoginResponse(access_token=token)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@auth_router.post("/changePassword", response_model=MessageResponse)
+def change_password(payload: ChangePasswordRequest, current_user: dict = Depends(authenticate_request)):
+    """
+    Change the password for the authenticated user.
+    - Requires valid Bearer token.
+    - Blocks Google sign-in users from changing password.
+    - Verifies old password before updating.
+    """
+    try:
+        user_id = int(current_user.get("id"))
+        change_user_password(user_id, payload.old_password, payload.new_password)
+        return MessageResponse(message="Password changed successfully")
+    except Exception as e:
+        # Map common error messages to appropriate HTTP codes if needed
+        msg = str(e)
+        if msg in ("User not found",):
+            raise HTTPException(status_code=404, detail=msg)
+        if msg in ("Old password is incorrect",):
+            raise HTTPException(status_code=400, detail=msg)
+        if msg in ("Google sign-in users cannot change password",):
+            raise HTTPException(status_code=403, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
 
 
 @auth_router.post("/GoogleCallBack")

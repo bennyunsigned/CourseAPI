@@ -66,3 +66,53 @@ def login_user(user: UserLogin) -> str:
     else:
         raise Exception("Failed to connect to the database.")
 
+
+def change_user_password(user_id: int, old_password: str, new_password: str) -> None:
+    """
+    Change the password for a local-account user after verifying the old password.
+    Google sign-in users are not allowed to change password here.
+    """
+    # Fetch current user
+    select_q = "SELECT id, password, provider FROM Users WHERE id = %s"
+    update_q = "UPDATE Users SET password = %s WHERE id = %s"
+
+    conn = get_db_connection()
+    if not conn:
+        raise Exception("Failed to connect to the database.")
+
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(select_q, (user_id,))
+        row = cur.fetchone()
+        if not row:
+            raise Exception("User not found")
+
+        provider = (row.get("provider") or "").lower()
+        if provider == "google":
+            raise Exception("Google sign-in users cannot change password")
+
+        # Verify old password
+        try:
+            current_plain = aes_cipher.decrypt(row["password"]) if row.get("password") else ""
+        except Exception:
+            # If stored password cannot be decrypted, treat as mismatch
+            current_plain = "__invalid__"
+
+        if current_plain != old_password:
+            raise Exception("Old password is incorrect")
+
+        # Encrypt and update new password
+        new_encrypted = aes_cipher.encrypt(new_password)
+        cur2 = conn.cursor()
+        cur2.execute(update_q, (new_encrypted, user_id))
+        conn.commit()
+        cur2.close()
+    except mysql.connector.Error as err:
+        raise Exception(f"Database error: {err}")
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+
