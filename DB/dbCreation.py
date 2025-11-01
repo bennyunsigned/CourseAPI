@@ -18,10 +18,60 @@ def create_users_table():
         provider_id VARCHAR(255),
         provider ENUM('local', 'google', 'facebook') NOT NULL,
         role ENUM('User', 'Admin') NOT NULL,
+        is_activated TINYINT(1) DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """
     execute_query(table_query, "Table 'Users' ensured to exist.")
+
+def ensure_users_activation_column():
+    """Ensure Users table has is_activated column (compatible with MySQL < 8.0)."""
+    connection = get_db_connection()
+    if not connection:
+        print("Error: Could not connect to DB to ensure Users.is_activated column")
+        return
+    try:
+        cursor = connection.cursor()
+        db_name = os.getenv("DB_NAME")
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'Users' AND COLUMN_NAME = 'is_activated'
+            """,
+            (db_name,)
+        )
+        (cnt,) = cursor.fetchone()
+        if cnt == 0:
+            cursor.execute("ALTER TABLE Users ADD COLUMN is_activated TINYINT(1) DEFAULT 1")
+            connection.commit()
+            print("Column 'Users.is_activated' added.")
+        else:
+            print("Column 'Users.is_activated' already exists.")
+    except mysql.connector.Error as err:
+        print(f"Error ensuring Users.is_activated: {err}")
+    finally:
+        try:
+            cursor.close()
+            connection.close()
+        except Exception:
+            pass
+
+def create_user_activation_tokens_table():
+    """Create table to store activation tokens for users."""
+    q = """
+    CREATE TABLE IF NOT EXISTS UserActivationTokens (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        token VARCHAR(255) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        used TINYINT(1) DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_user_activation_user FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+        UNIQUE KEY uniq_activation_token (token)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+    execute_query(q, "Table 'UserActivationTokens' ensured to exist.")
 
 def ensure_userCreation_stored_procedure_exists():
     """Ensure the CreateUser stored procedure exists in the database."""
@@ -721,6 +771,23 @@ def create_helpdesk_tables():
         execute_query(ticket_attachments_q, "Table 'ticket_attachments' ensured to exist (no CHECK applied).")
 
 
+def create_user_login_log_table():
+    """Create the UserLoginLog table to track login events."""
+    q = """
+    CREATE TABLE IF NOT EXISTS UserLoginLog (
+        LogId BIGINT AUTO_INCREMENT PRIMARY KEY,
+        UserId INT NOT NULL,
+        Provider VARCHAR(32) NOT NULL,
+        LoggedInAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        IP VARCHAR(45) NULL,
+        UserAgent VARCHAR(255) NULL,
+        INDEX idx_user_time (UserId, LoggedInAt),
+        FOREIGN KEY (UserId) REFERENCES Users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+    execute_query(q, "Table 'UserLoginLog' ensured to exist.")
+
+
 
 if __name__ == "__main__":
     # create_users_table()
@@ -733,9 +800,7 @@ if __name__ == "__main__":
     # ensure_getCourseContentDetailsByCategory_procedure_exists()  # <-- Add this line
     # insert_admin_user()    
     # create_module_video_table()
-    # create_course_content_operations_table()
-    
-    
+    # create_course_content_operations_table()    
     # create_user_course_purchase_table()
     # create_user_subscription_table()
     # ensure_user_purchase_and_subscription_details_procedure_exists()
@@ -743,7 +808,12 @@ if __name__ == "__main__":
     # create_cart_table()
     # ensure_getCartProductsByUser_procedure_exists()
     # create_email_master_table()    
-    create_helpdesk_tables()
+    # Ensure user activation support
+    #create_helpdesk_tables()
+    
+    ensure_users_activation_column()
+    create_user_activation_tokens_table()
+    create_user_login_log_table()    
     
     # create_testimonial_table()    
     # insert_default_data()

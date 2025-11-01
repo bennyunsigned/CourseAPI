@@ -109,6 +109,72 @@ def get_my_payments(claims: dict = Depends(authenticate_request)):
             pass
 
 
+@report_router.get("/users/last-login")
+def get_users_last_login(claims: dict = Depends(authenticate_request)):
+    """
+    Return all users with their last login datetime.
+    Restricted to Admin users.
+    """
+    if (claims or {}).get("role") != "Admin":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    try:
+        cur = conn.cursor(dictionary=True)
+        # Use LEFT JOIN so users with no logins still appear with null last_login_at
+        query = (
+            "SELECT u.id, u.name, u.email, MAX(l.LoggedInAt) AS last_login_at "
+            "FROM Users u "
+            "LEFT JOIN UserLoginLog l ON l.UserId = u.id "
+            "GROUP BY u.id, u.name, u.email "
+            "ORDER BY last_login_at IS NULL ASC, last_login_at DESC"
+        )
+        cur.execute(query)
+        rows = cur.fetchall()
+        return rows
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+@report_router.get("/users/count")
+def get_users_count(claims: dict = Depends(authenticate_request)):
+    """Return total number of users. Admin only."""
+    if (claims or {}).get("role") != "Admin":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM Users")
+        row = cur.fetchone()
+        total = int(row[0]) if row and row[0] is not None else 0
+        return {"count": total}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 @report_router.get("/admin/total")
 def admin_total_payments(
     start: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
