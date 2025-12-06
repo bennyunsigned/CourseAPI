@@ -14,6 +14,44 @@ from dotenv import load_dotenv
 # Load .env if present
 load_dotenv()
 
+import threading
+import time
+
+# Background cleanup control
+_cleanup_thread = None
+_cleanup_stop_event = threading.Event()
+
+def _cleanup_loop(interval_seconds: int = 300):
+    """Loop that runs every `interval_seconds` to remove unactivated users."""
+    print(f"[authController] Starting cleanup loop every {interval_seconds}s")
+    while not _cleanup_stop_event.is_set():
+        try:
+            from Services.authService import cleanup_unactivated_users
+            deleted = cleanup_unactivated_users()
+            if deleted > 0:
+                print(f"[authController] Cleaned up {deleted} unactivated users")
+        except Exception as e:
+            print(f"[authController] Cleanup loop error: {e}")
+        
+        # wait with early exit support
+        _cleanup_stop_event.wait(interval_seconds)
+    print("[authController] Cleanup loop stopped")
+
+def start_cleanup_thread(interval_seconds: int = 300):
+    global _cleanup_thread, _cleanup_stop_event
+    if _cleanup_thread and _cleanup_thread.is_alive():
+        return
+    _cleanup_stop_event.clear()
+    _cleanup_thread = threading.Thread(target=_cleanup_loop, args=(interval_seconds,), daemon=True)
+    _cleanup_thread.start()
+
+def stop_cleanup_thread():
+    global _cleanup_thread, _cleanup_stop_event
+    if _cleanup_thread and _cleanup_thread.is_alive():
+        _cleanup_stop_event.set()
+    _cleanup_thread.join(timeout=5)
+
+
 auth_router = APIRouter()
 
 @auth_router.post("/register", response_model=MessageResponse)
