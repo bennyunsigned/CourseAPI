@@ -199,6 +199,7 @@ def record_user_login(user_id: int, provider: str, ip: str | None = None, user_a
             (user_id, (provider or 'local'), ip, user_agent)
         )
         conn.commit()
+
     except Exception:
         pass
     finally:
@@ -207,4 +208,40 @@ def record_user_login(user_id: int, provider: str, ip: str | None = None, user_a
             conn.close()
         except Exception:
             pass
+
+
+def cleanup_unactivated_users(batch_size: int = 100) -> int:
+    """
+    Remove users who have not activated their account within 20 minutes of creation.
+    Returns the number of deleted users.
+    """
+    conn = get_db_connection()
+    if not conn:
+        return 0
+    
+    deleted_count = 0
+    try:
+        cur = conn.cursor()
+        # Delete unactivated users created > 20 minutes ago
+        # Safe to hard delete as cascading FKs (if any) or lack of data ensures clean removal
+        query = """
+        DELETE FROM Users 
+        WHERE is_activated = 0 
+          AND created_at < (NOW() - INTERVAL 20 MINUTE)
+        LIMIT %s
+        """
+        cur.execute(query, (batch_size,))
+        deleted_count = cur.rowcount
+        conn.commit()
+    except Exception as e:
+        print(f"[authService] Cleanup error: {e}")
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+            
+    return deleted_count
+
 

@@ -15,7 +15,8 @@ from fastapi import Response
 from Utils.ExceptionHandler import global_exception_handler
 
 # Routers
-from Controllers.authController import auth_router
+from Controllers.authController import auth_router, start_cleanup_thread, stop_cleanup_thread  # Updated import
+
 from Controllers.courseController import course_router
 from Controllers.courseModuleController import course_module_router
 from Controllers.utilController import util_router
@@ -121,12 +122,15 @@ def _start_background_jobs():
     start_cache_refresh_thread(interval_seconds=15 * 60)
     # start email sender thread (interval from env, default 60s)
     start_email_sender(interval_seconds=int(os.getenv('EMAIL_SENDER_INTERVAL', '60')))
+    # start user cleanup (every 5 mins)
+    start_cleanup_thread(interval_seconds=300)
 
 
 @app.on_event("shutdown")
 def _stop_background_jobs():
     stop_cache_refresh_thread()
     stop_email_sender()
+    stop_cleanup_thread()
 
 # ✅ Root Endpoint
 @app.get("/", response_class=HTMLResponse)
