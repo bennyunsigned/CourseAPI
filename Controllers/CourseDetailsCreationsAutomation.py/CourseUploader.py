@@ -34,6 +34,9 @@ TABLE_NAME = 'course_content_operations'
 # Prompt user for ITEM_IDENTIFIER
 ITEM_IDENTIFIER = input("Enter ITEM_IDENTIFIER: ")
 
+# Centralized LLM model name (used for LM Studio / Ollama calls)
+LLM_MODEL = "mistralai/ministral-3-3b"
+
 STATEMENTS_DIR = r"c:\Course_Module_Video_Statements"
 os.makedirs(STATEMENTS_DIR, exist_ok=True)
 # statements_file will be defined after course_id is set
@@ -245,39 +248,87 @@ def download_video(url, dest, timeout=30):
         print(f"⏳ Waiting 20 seconds before retry...")
         time.sleep(20)
 
-def get_chat_response(prompt, model="mistral:7b"):
-    import ollama
+def get_chat_response(prompt, model=LLM_MODEL):
+    """
+    Obtain a chat response using LM Studio (`lmstudio`).
+    Falls back to Ollama streaming if lmstudio is not available or initialization fails.
+    The LM Studio model instance is cached in `_lm_model` to avoid repeated initialization.
+    """
+    global _lm_model
     try:
-        print(f"    🤖 Calling Ollama with model: {model}")
-        print(f"    📝 Prompt length: {len(prompt)} characters")
-        
-        stream = ollama.chat(model=model, messages=[{"role": "user", "content": prompt}], stream=True)
-        message_chunks = []
-        for chunk in stream:
-            if "message" in chunk and "content" in chunk["message"]:
-                message_chunks.append(chunk["message"]["content"])
-        
-        message = "".join(message_chunks).strip()
-        print(f"    ✅ Raw AI response length: {len(message)} characters")
-        
-        if not message:
-            print("    ⚠️  AI returned empty response")
+        # Try LM Studio first
+        try:
+            import lmstudio as lms
+        except Exception:
+            lms = None
+
+        if lms:
+            try:
+                if '_lm_model' not in globals() or _lm_model is None:
+                    print(f"    🔧 Initializing LM Studio model: {LLM_MODEL}")
+                    # create and cache the model instance
+                    _lm_model = lms.llm(LLM_MODEL)
+
+                print(f"    🤖 Calling LM Studio model (cached) with prompt length: {len(prompt)}")
+                res = _lm_model.respond(prompt)
+                # respond() may return a string or object; coerce to string
+                message = res if isinstance(res, str) else str(res)
+                message = message.strip()
+
+                if not message:
+                    print("    ⚠️  LM Studio returned empty response")
+                    return ""
+
+                # Clean up and return
+                message = clean_ai_response(message)
+                print(f"    ✅ LM Studio response length: {len(message)} characters")
+                print(f"    📋 Processed response: {message[:100]}{'...' if len(message) > 100 else ''}")
+                return message
+
+            except Exception as e:
+                print(f"    ⚠️ LM Studio error: {e}. Falling back to Ollama if available.")
+
+        # Fallback to Ollama streaming logic
+        try:
+            import ollama
+        except Exception:
+            print("    ❌ Neither LM Studio nor Ollama are available (missing libraries).")
             return ""
-        
-        if "deepseek" in model.lower():
-            message = re.sub(r"<think>.*?</think>", "", message, flags=re.DOTALL).strip()
-        
-        # Clean up common AI response patterns
-        message = clean_ai_response(message)
-        
-        print(f"    📋 Processed response: {message[:100]}{'...' if len(message) > 100 else ''}")
-        return message
-        
+
+        try:
+            print(f"    🤖 Calling Ollama with model: {model}")
+            print(f"    📝 Prompt length: {len(prompt)} characters")
+            stream = ollama.chat(model=model, messages=[{"role": "user", "content": prompt}], stream=True)
+            message_chunks = []
+            for chunk in stream:
+                if "message" in chunk and "content" in chunk["message"]:
+                    message_chunks.append(chunk["message"]["content"])
+
+            message = "".join(message_chunks).strip()
+            print(f"    ✅ Raw AI response length: {len(message)} characters")
+
+            if not message:
+                print("    ⚠️  AI returned empty response")
+                return ""
+
+            if "deepseek" in model.lower():
+                message = re.sub(r"<think>.*?</think>", "", message, flags=re.DOTALL).strip()
+
+            # Clean up common AI response patterns
+            message = clean_ai_response(message)
+
+            print(f"    📋 Processed response: {message[:100]}{'...' if len(message) > 100 else ''}")
+            return message
+
+        except Exception as e:
+            print(f"    ❌ Ollama API error: {str(e)}")
+            return ""
+
     except Exception as e:
-        print(f"    ❌ Ollama API error: {str(e)}")
+        print(f"    ❌ Unexpected error in get_chat_response: {e}")
         return ""
 
-def get_validated_ai_response(prompt, request_type, max_words=None, min_words=None, model="mistral:7b", max_retries=100):
+def get_validated_ai_response(prompt, request_type, max_words=None, min_words=None, model=LLM_MODEL, max_retries=100):
     """
     Get AI response with automatic validation and retry logic
     
@@ -894,11 +945,11 @@ def process_downloaded_videos(course_id, downloaded_videos):
             else:
                 print("📝 Generating title with validation and retry...")
                 title_result = get_validated_ai_response(
-                    f"You are an English content creator. Create a short English video title (maximum 8 words) for this educational programming content. Respond ONLY with the English title, no Hindi, no transliterated text, no explanations:\n\nContent: {transcript[:1000]}",
+                    f"You are an English content creator. Create a short English video title (maximum 8 words) for this educational content. Respond ONLY with the English title, no Hindi, no transliterated text, no explanations:\n\nContent: {transcript[:1000]}",
                     request_type='title',
                     max_words=8,
                     min_words=2,
-                    model="mistral:7b",
+                    model=LLM_MODEL,
                     max_retries=100
                 )
                 
@@ -909,7 +960,7 @@ def process_downloaded_videos(course_id, downloaded_videos):
                         request_type='description',
                         max_words=50,
                         min_words=8,
-                        model="mistral:7b",
+                        model=LLM_MODEL,
                         max_retries=100
                     )
                     
@@ -1208,7 +1259,7 @@ def test_ollama_connectivity():
             request_type='title',
             max_words=1,
             min_words=1,
-            model="mistral:7b",
+            model=LLM_MODEL,
             max_retries=100
         )
         
@@ -1219,7 +1270,7 @@ def test_ollama_connectivity():
         else:
             print(f"⚠️  Test response validation failed: {test_result['validation_result'].get('issues', [])}")
             # Still check if basic functionality works
-            basic_response = get_chat_response("Say OK", model="mistral:7b")
+            basic_response = get_chat_response("Say OK", model=LLM_MODEL)
             if basic_response and len(basic_response.strip()) > 0:
                 print("✅ Basic Ollama functionality works, validation strict")
                 return True
@@ -1338,7 +1389,7 @@ def generate_description_from_filename(video_name):
             return template
     
     # Default description
-    return f"Educational programming content covering {clean_name.lower().replace('_', ' ').replace('-', ' ')}. Learn key concepts and practical applications through step-by-step instructions."
+    return f"Educational content covering {clean_name.lower().replace('_', ' ').replace('-', ' ')}. Learn key concepts and practical applications through step-by-step instructions."
 
 if __name__ == "__main__":
     print("🚀 Video Processing and Course Creation Tool")
@@ -1369,7 +1420,7 @@ if __name__ == "__main__":
         print("\n❌ Ollama connectivity test failed!")
         print("Please check:")
         print("1. Ollama is installed and running")
-        print("2. mistral:7b model is available (run: ollama pull mistral:7b)")
+        print(f"2. Model available: {LLM_MODEL} (if using Ollama, pull the appropriate Ollama model)")
         print("3. Run 'ollama serve' to start the server")
         
         # Ask user if they want to continue without AI

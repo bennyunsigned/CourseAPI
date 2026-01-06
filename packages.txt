@@ -17,3 +17,4 @@ SpeechRecognition
 pydub
 tqdm
 ollama
+lmstudio
