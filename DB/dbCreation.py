@@ -57,6 +57,38 @@ def ensure_users_activation_column():
         except Exception:
             pass
 
+def ensure_users_image_column():
+    """Ensure Users table has image column."""
+    connection = get_db_connection()
+    if not connection:
+        return
+    try:
+        cursor = connection.cursor()
+        db_name = os.getenv("DB_NAME")
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'Users' AND COLUMN_NAME = 'user_image'
+            """,
+            (db_name,)
+        )
+        (cnt,) = cursor.fetchone()
+        if cnt == 0:
+            cursor.execute("ALTER TABLE Users ADD COLUMN user_image VARCHAR(500) DEFAULT NULL")
+            connection.commit()
+            print("Column 'Users.user_image' added.")
+        else:
+            print("Column 'Users.user_image' already exists.")
+    except mysql.connector.Error as err:
+        print(f"Error ensuring Users.user_image: {err}")
+    finally:
+        try:
+            cursor.close()
+            connection.close()
+        except Exception:
+            pass
+
 def create_user_activation_tokens_table():
     """Create table to store activation tokens for users."""
     q = """
@@ -943,6 +975,26 @@ def ensure_payment_log_table():
     """
     execute_query(table_query, "Table 'PaymentLog' ensured to exist.")
 
+def create_customer_reviews_table():
+    """Create the CustomerReviews table if it does not exist."""
+    # Drop and re-create to ensure schema consistency for this new feature
+    drop_query = "DROP TABLE IF EXISTS CustomerReviews"
+    table_query = """
+    CREATE TABLE CustomerReviews (
+        ReviewId INT AUTO_INCREMENT PRIMARY KEY,
+        UserId INT NOT NULL,
+        CourseId INT NULL,
+        BundleId INT NULL,
+        ProductId INT NULL,
+        Rating INT NOT NULL,
+        ReviewText TEXT,
+        CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        Status VARCHAR(50) DEFAULT 'Active'
+    );
+    """
+    execute_query(drop_query, "Old 'CustomerReviews' dropped (if any).")
+    execute_query(table_query, "Table 'CustomerReviews' ensured to exist with NULLable relations.")
+
 if __name__ == "__main__":
     # create_users_table()
     # create_category_master_table()
@@ -966,6 +1018,7 @@ if __name__ == "__main__":
 
 
     ensure_users_activation_column()
+    ensure_users_image_column()
     create_product_master_table()   
     create_product_attachments_table()
     create_cart_table()
@@ -974,6 +1027,8 @@ if __name__ == "__main__":
     create_bundle_mapping_table()
     create_product_payment_table()
     create_bundle_payment_table()
+    create_customer_reviews_table()
+    ensure_payment_log_table()
     
     # create_testimonial_table()    
     # insert_default_data()

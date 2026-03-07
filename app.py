@@ -32,6 +32,7 @@ from Controllers.reportController import report_router
 from Controllers.productController import product_router
 from Controllers.bundleController import bundle_router
 from Controllers.paymentController import payment_router
+from Controllers.reviewController import review_router
 
 
 # ✅ FastAPI app
@@ -107,6 +108,7 @@ app.include_router(report_router, prefix="/api/report", tags=["Report"])
 app.include_router(product_router, prefix="/api/product", tags=["Product"])
 app.include_router(bundle_router, prefix="/api/bundle", tags=["Bundle"])
 app.include_router(payment_router, prefix="/api/payment", tags=["Payment"])
+app.include_router(review_router, prefix="/api/reviews", tags=["Reviews"])
 
 # Serve uploaded files from the `Uploads` directory at the `/uploads` URL path.
 # Use an absolute path to the folder so mounting works regardless of CWD.
@@ -127,10 +129,12 @@ if uploads_dir:
 def _start_background_jobs():
     # Ensure DB exists and schema is up to date
     create_database_if_not_exists()
-    from DB.dbCreation import ensure_payment_schema, ensure_payment_log_table
+    from DB.dbCreation import ensure_payment_schema, ensure_payment_log_table, ensure_users_image_column, create_customer_reviews_table
     try:
         ensure_payment_schema()
         ensure_payment_log_table()
+        ensure_users_image_column()
+        create_customer_reviews_table()
     except Exception as e:
         print(f"Startup schema error: {e}")
 
