@@ -12,8 +12,9 @@ def create_course(course_data: CourseRequest, user_id: int) -> CourseResponse:
     query = """
         INSERT INTO CourseMaster (
             CategoryId,CourseName, CourseDescription, CourseInfo, CourseLanguage, BannerImage, Author, Rating,
-            ActualPrice, DiscountedPrice, IsPremium, IsBestSeller, VideoPath, IsPublic, CreatedBy, Status
-        ) VALUES (%s,%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ActualPrice, DiscountedPrice, IsPremium, IsBestSeller, VideoPath, IsPublic, CreatedBy, Status,
+            EmailSubject, EmailBody
+        ) VALUES (%s,%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     connection = get_db_connection()
     cursor = None
@@ -39,6 +40,8 @@ def create_course(course_data: CourseRequest, user_id: int) -> CourseResponse:
                     course_data.is_public,
                     user_id,
                     "Active",  # Default status
+                    course_data.email_subject,
+                    course_data.email_body,
                 ),
             )
             connection.commit()
@@ -65,6 +68,8 @@ def create_course(course_data: CourseRequest, user_id: int) -> CourseResponse:
                 is_public=course_data.is_public,
                 created_by=str(user_id),  # Convert user_id to string
                 status="Active",
+                email_subject=course_data.email_subject,
+                email_body=course_data.email_body,
             )
         except mysql.connector.Error as err:
             raise Exception(f"Database error: {err}")
@@ -106,7 +111,9 @@ def get_course_by_id(course_id: int) -> CourseResponse:
                 video_path=course["VideoPath"],
                 is_public=course["IsPublic"],
                 created_by=course["CreatedBy"],
-                status=course["Status"],
+                status=course.get("Status", "Active"),
+                email_subject=course.get("EmailSubject"),
+                email_body=course.get("EmailBody"),
             )
         except mysql.connector.Error as err:
             raise Exception(f"Database error: {err}")
@@ -139,7 +146,9 @@ def update_course(course_id: int, course_data: CourseUpdateRequest, updated_by: 
             IsPublic = %s,
             UpdatedBy = %s,
             UpdatedAt = NOW(),
-            Status = %s
+            Status = %s,
+            EmailSubject = %s,
+            EmailBody = %s
         WHERE CourseId = %s
     """
     connection = get_db_connection()
@@ -166,6 +175,8 @@ def update_course(course_id: int, course_data: CourseUpdateRequest, updated_by: 
                     course_data.is_public,
                     updated_by,  # Use the updated_by parameter
                     "Active",  # Default status
+                    course_data.email_subject,
+                    course_data.email_body,
                     course_id,
                 ),
             )
@@ -234,7 +245,9 @@ def get_all_courses() -> list[CourseResponse]:
                     video_path=course["VideoPath"],
                     is_public=course["IsPublic"],
                     created_by=course["CreatedBy"],
-                    status=course["Status"],
+                    status=course.get("Status", "Active"),
+                    email_subject=course.get("EmailSubject"),
+                    email_body=course.get("EmailBody"),
                 )
                 for course in courses
             ]

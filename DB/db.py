@@ -25,15 +25,16 @@ def create_database_if_not_exists():
 
 def get_db_connection():
     """Establish and return a database connection."""
-    create_database_if_not_exists()  # Ensure the database exists before connecting
+    # create_database_if_not_exists() should be called at app startup, not every connection
     try:
         connection = mysql.connector.connect(
             host=os.getenv("DB_HOST"),
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME")
+            database=os.getenv("DB_NAME"),
+            connect_timeout=10
         )
-        print("Database connection established successfully.")
+        # print("Database connection established successfully.") # Verify logic if needed, but reducing spam
         return connection
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:

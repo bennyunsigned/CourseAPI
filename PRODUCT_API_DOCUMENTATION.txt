@@ -1,0 +1,65 @@
+================================================================================
+                        PRODUCT API DOCUMENTATION
+================================================================================
+
+BASE URL: /api/product
+Authentication: Required for POST/PUT/DELETE (JWT Token in Authorization header)
+
+
+================================================================================
+1. SAVE PRODUCT ATTACHMENTS
+================================================================================
+Endpoint:    POST /api/product/{product_id}/attachments
+Description: Save/Update multiple attachments for a specific product
+
+Request Body (Array of AttachmentRequest):
+[
+  {
+    "file_name": "string (optional)",
+    "file_url": "string (required)",
+    "file_type": "string (optional)"
+  }
+]
+
+Response:
+{ "message": "Attachments saved successfully" }
+
+================================================================================
+2. DELETE PRODUCT ATTACHMENT
+================================================================================
+Endpoint:    DELETE /api/product/{product_id}/attachments/{attachment_id}
+Response:
+{ "message": "Attachment deleted successfully" }
+
+================================================================================
+3. GET ALL ATTACHMENT DETAILS
+================================================================================
+Endpoint:    GET /api/product/attachments/all
+Response:    Array of ProductAttachmentResponse Objects
+
+================================================================================
+MODELS & INTERFACES (Angular context)
+================================================================================
+
+interface ProductAttachmentResponse {
+  attachment_id: number;
+  product_id: number;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  uploaded_on: string;
+}
+
+interface ProductResponse {
+  product_id: number;
+  product_name: string;
+  product_price: number;
+  product_discount_price: number;
+  product_description: string;
+  product_content: string;
+  product_image: string;
+  is_active: boolean;
+  created_on: string;
+  updated_on: string;
+  attachments: ProductAttachmentResponse[];
+}

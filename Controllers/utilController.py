@@ -32,6 +32,24 @@ async def upload_image(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
+@util_router.post("/uploadProductImage")
+async def upload_product_image(file: UploadFile = File(...)):
+    upload_dir = "Uploads/ProductImages"
+    os.makedirs(upload_dir, exist_ok=True)
+    # Generate filename in ddMMyyyyhhmmss format with original extension
+    timestamp = datetime.now().strftime("%d%m%Y%H%M%S")
+    ext = os.path.splitext(file.filename)[1]
+    new_filename = f"{timestamp}_{uuid.uuid4().hex}{ext}"
+    file_location = os.path.join(upload_dir, new_filename)
+    try:
+        with open(file_location, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        # Return the relative path for frontend use
+        return JSONResponse(content={"path": f"/{file_location}"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+
 @util_router.post("/getYoutubeDuration")
 async def get_youtube_duration(payload: dict = Body(...)):
     url = payload.get("url")
@@ -131,3 +149,67 @@ async def get_archiveorg_duration(payload: dict = Body(...)):
                 os.remove(temp_video.name)
 
     return StreamingResponse(stream_progress(), media_type="application/json")
+
+@util_router.get("/debug-payments")
+async def debug_payments():
+    from DB.db import get_db_connection
+    connection = get_db_connection()
+    if not connection:
+        return {"error": "Failed to connect to database"}
+    try:
+        cursor = connection.cursor(dictionary=True)
+        # Check last 10 payments
+        cursor.execute("SELECT * FROM Payment ORDER BY id DESC LIMIT 10")
+        payments = cursor.fetchall()
+        
+        # Check last 10 emails
+        cursor.execute("SELECT * FROM EmailMaster ORDER BY EmailId DESC LIMIT 10")
+        emails = cursor.fetchall()
+        
+        # Check logs
+        cursor.execute("SHOW TABLES LIKE 'PaymentLog'")
+        logs = []
+        if cursor.fetchone():
+            cursor.execute("SELECT * FROM PaymentLog ORDER BY id DESC LIMIT 10")
+            logs = cursor.fetchall()
+            
+        return {
+            "payments": payments,
+            "emails": emails,
+            "logs": logs
+        }
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        cursor.close()
+        connection.close()
+
+@util_router.get("/debug-db")
+async def debug_db():
+    from DB.db import get_db_connection
+    connection = get_db_connection()
+    if not connection:
+        return {"error": "Failed to connect to database"}
+    try:
+        cursor = connection.cursor(dictionary=True)
+        # List tables
+        cursor.execute("SHOW TABLES")
+        tables = cursor.fetchall()
+        
+        # Check columns for key tables
+        schema = {}
+        for table_dict in tables:
+            table_name = list(table_dict.values())[0]
+            if table_name in ("ProductMaster", "BundleMaster", "CourseMaster", "SubscriptionPlan", "EmailMaster", "Payment"):
+                cursor.execute(f"DESCRIBE {table_name}")
+                schema[table_name] = cursor.fetchall()
+        
+        return {
+            "tables": tables,
+            "schema": schema
+        }
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        cursor.close()
+        connection.close()

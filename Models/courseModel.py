@@ -16,6 +16,8 @@ class CourseRequest(BaseModel):
     is_best_seller: Optional[bool]
     video_path: Optional[str]
     is_public: bool
+    email_subject: Optional[str] = None
+    email_body: Optional[str] = None
 
 class CourseResponse(BaseModel):
     category_id:int
@@ -35,6 +37,8 @@ class CourseResponse(BaseModel):
     is_public: bool
     created_by: str
     status: str
+    email_subject: Optional[str] = None
+    email_body: Optional[str] = None
 
 class CourseUpdateRequest(BaseModel):
     category_id:int
@@ -51,3 +55,5 @@ class CourseUpdateRequest(BaseModel):
     is_best_seller: Optional[bool]
     video_path: Optional[str]
     is_public: Optional[bool]
+    email_subject: Optional[str] = None
+    email_body: Optional[str] = None

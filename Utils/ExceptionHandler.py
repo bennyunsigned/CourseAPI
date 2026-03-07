@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 from fastapi import Request, HTTPException
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import JSONResponse
 import traceback
 
@@ -30,7 +31,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         log_file.write(log_message)
 
     # Return a JSON response to the client
-    if isinstance(exc, HTTPException):
+    if isinstance(exc, (HTTPException, StarletteHTTPException)):
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},

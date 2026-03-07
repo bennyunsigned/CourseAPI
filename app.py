@@ -16,6 +16,7 @@ from Utils.ExceptionHandler import global_exception_handler
 
 # Routers
 from Controllers.authController import auth_router, start_cleanup_thread, stop_cleanup_thread  # Updated import
+from DB.db import create_database_if_not_exists  # NEW import
 
 from Controllers.courseController import course_router
 from Controllers.courseModuleController import course_module_router
@@ -23,11 +24,14 @@ from Controllers.utilController import util_router
 from Controllers.categoryController import category_router
 from Controllers.courseProgressController import course_progress_router
 from Controllers.courseProgressController import start_cache_refresh_thread, stop_cache_refresh_thread
-from Controllers.instamojoController import router as instamojo_router
+from Controllers.paymentGatewayController import router as payment_gateway_router
 from Controllers.cartController import cart_router
 from Controllers.emailController import router as email_router, start_email_sender, stop_email_sender
 from Controllers.helpdeskController import helpdesk_router
 from Controllers.reportController import report_router
+from Controllers.productController import product_router
+from Controllers.bundleController import bundle_router
+from Controllers.paymentController import payment_router
 
 
 # ✅ FastAPI app
@@ -95,11 +99,14 @@ app.include_router(course_module_router, prefix="/api/courseModule", tags=["Cour
 app.include_router(util_router, prefix="/api/media", tags=["Video"])
 app.include_router(category_router, prefix="/api/category", tags=["Category"])
 app.include_router(course_progress_router, prefix="/api/courseProgress", tags=["CourseProgress"])
-app.include_router(instamojo_router, prefix="/api", tags=["Instamojo"])
+app.include_router(payment_gateway_router, prefix="/api/payment-gateway", tags=["Payment Gateway"])
 app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
 app.include_router(email_router, prefix="/api/email", tags=["Email"])
 app.include_router(helpdesk_router, prefix="/api/helpdesk", tags=["Helpdesk"])
 app.include_router(report_router, prefix="/api/report", tags=["Report"])
+app.include_router(product_router, prefix="/api/product", tags=["Product"])
+app.include_router(bundle_router, prefix="/api/bundle", tags=["Bundle"])
+app.include_router(payment_router, prefix="/api/payment", tags=["Payment"])
 
 # Serve uploaded files from the `Uploads` directory at the `/uploads` URL path.
 # Use an absolute path to the folder so mounting works regardless of CWD.
@@ -118,6 +125,15 @@ if uploads_dir:
 
 @app.on_event("startup")
 def _start_background_jobs():
+    # Ensure DB exists and schema is up to date
+    create_database_if_not_exists()
+    from DB.dbCreation import ensure_payment_schema, ensure_payment_log_table
+    try:
+        ensure_payment_schema()
+        ensure_payment_log_table()
+    except Exception as e:
+        print(f"Startup schema error: {e}")
+
     # start cache refresher every 15 minutes
     start_cache_refresh_thread(interval_seconds=15 * 60)
     # start email sender thread (interval from env, default 60s)

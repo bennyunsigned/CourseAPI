@@ -154,7 +154,9 @@ def create_course_master_table():
         CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         UpdatedBy VARCHAR(255),
         UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        Status VARCHAR(50) DEFAULT 'Active'
+        Status VARCHAR(50) DEFAULT 'Active',
+        EmailSubject VARCHAR(255) DEFAULT NULL,
+        EmailBody TEXT DEFAULT NULL
     );
     """
     execute_query(table_query, "Table 'CourseMaster' ensured to exist.")
@@ -403,6 +405,8 @@ def create_subscription_plan_table():
         UpdatedBy VARCHAR(255),
         UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         Status VARCHAR(50) DEFAULT 'Active',
+        EmailSubject VARCHAR(255) DEFAULT NULL,
+        EmailBody TEXT DEFAULT NULL
     );
     """
     execute_query(table_query, "Table 'SubscriptionPlan' ensured to exist.")
@@ -771,6 +775,41 @@ def create_helpdesk_tables():
         execute_query(ticket_attachments_q, "Table 'ticket_attachments' ensured to exist (no CHECK applied).")
 
 
+def create_product_master_table():
+    """Create the ProductMaster table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS ProductMaster (
+        ProductID INT AUTO_INCREMENT PRIMARY KEY,
+        ProductName VARCHAR(255) NOT NULL,
+        ActualProductPrice DECIMAL(10,2) DEFAULT 0.00,
+        DiscountProductPrice DECIMAL(10,2) DEFAULT 0.00,
+        ProductDescription TEXT,
+        ProductContent TEXT,
+        ProductImage VARCHAR(500),
+        IsActive BOOLEAN DEFAULT TRUE,
+        CreatedOn DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UpdatedOn DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        EmailSubject VARCHAR(255) DEFAULT NULL,
+        EmailBody TEXT DEFAULT NULL
+    );
+    """
+    execute_query(table_query, "Table 'ProductMaster' ensured to exist.")
+
+def create_product_attachments_table():
+    """Create the ProductAttachments table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS ProductAttachments (
+        AttachmentID INT AUTO_INCREMENT PRIMARY KEY,
+        ProductID INT NOT NULL,
+        FileName VARCHAR(255),
+        FileURL VARCHAR(500) NOT NULL,
+        FileType VARCHAR(50),
+        UploadedOn DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (ProductID) REFERENCES ProductMaster(ProductID) ON DELETE CASCADE
+    );
+    """
+    execute_query(table_query, "Table 'ProductAttachments' ensured to exist.")
+
 def create_user_login_log_table():
     """Create the UserLoginLog table to track login events."""
     q = """
@@ -787,7 +826,122 @@ def create_user_login_log_table():
     """
     execute_query(q, "Table 'UserLoginLog' ensured to exist.")
 
+def create_bundle_master_table():
+    """Create the BundleMaster table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS BundleMaster (
+        BundleID INT AUTO_INCREMENT PRIMARY KEY,
+        BundleName VARCHAR(255) NOT NULL,
+        BundleDescription TEXT,
+        ActualBundlePrice DECIMAL(10, 2) NOT NULL,
+        DiscountBundlePrice DECIMAL(10, 2) NOT NULL,
+        IsActive BOOLEAN DEFAULT TRUE,
+        CreatedOn DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UpdatedOn DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        EmailSubject VARCHAR(255) DEFAULT NULL,
+        EmailBody TEXT DEFAULT NULL
+    );
+    """
+    execute_query(table_query, "Table 'BundleMaster' ensured to exist.")
 
+def create_bundle_mapping_table():
+    """Create the BundleMapping table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS BundleMapping (
+        BundleMappingID INT AUTO_INCREMENT PRIMARY KEY,
+        BundleID INT NOT NULL,
+        ProductID INT NOT NULL,
+        FOREIGN KEY (BundleID) REFERENCES BundleMaster(BundleID) ON DELETE CASCADE,
+        FOREIGN KEY (ProductID) REFERENCES ProductMaster(ProductID) ON DELETE CASCADE
+    );
+    """
+    execute_query(table_query, "Table 'BundleMapping' ensured to exist.")
+
+def create_product_payment_table():
+    """Create the ProductPayment table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS ProductPayment (
+        ProductPaymentID INT AUTO_INCREMENT PRIMARY KEY,
+        UserID INT NOT NULL,
+        ProductID INT NOT NULL,
+        Amount DECIMAL(10, 2) NOT NULL,
+        PaymentID VARCHAR(255) NOT NULL,
+        Status VARCHAR(50) DEFAULT 'Completed',
+        PaymentDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (UserID) REFERENCES Users(id) ON DELETE CASCADE,
+        FOREIGN KEY (ProductID) REFERENCES ProductMaster(ProductID) ON DELETE CASCADE
+    );
+    """
+    execute_query(table_query, "Table 'ProductPayment' ensured to exist.")
+
+def create_bundle_payment_table():
+    """Create the BundlePayment table if it does not exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS BundlePayment (
+        BundlePaymentID INT AUTO_INCREMENT PRIMARY KEY,
+        UserID INT NOT NULL,
+        BundleID INT NOT NULL,
+        Amount DECIMAL(10, 2) NOT NULL,
+        PaymentID VARCHAR(255) NOT NULL,
+        Status VARCHAR(50) DEFAULT 'Completed',
+        PaymentDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (UserID) REFERENCES Users(id) ON DELETE CASCADE,
+        FOREIGN KEY (BundleID) REFERENCES BundleMaster(BundleID) ON DELETE CASCADE
+    );
+    """
+    execute_query(table_query, "Table 'BundlePayment' ensured to exist.")
+
+
+
+def ensure_payment_schema():
+    """Ensure Payment table has all necessary columns for latest functionality."""
+    # First ensure table exists
+    create_payment_table()
+    
+    connection = get_db_connection()
+    if not connection: return
+    try:
+        cursor = connection.cursor()
+        cols = [
+            ("course_id", "INT DEFAULT NULL"),
+            ("subscription_type", "VARCHAR(255) DEFAULT NULL"),
+            ("product_id", "INT DEFAULT NULL"),
+            ("bundle_id", "INT DEFAULT NULL"),
+            ("payment_id", "VARCHAR(255) DEFAULT NULL"),
+            ("payment_type", "VARCHAR(50) DEFAULT NULL"),
+            ("user_id", "INT DEFAULT NULL"),
+            ("amount", "DECIMAL(10,2) DEFAULT NULL"),
+            ("status", "VARCHAR(50) DEFAULT NULL"),
+            ("email", "VARCHAR(255) DEFAULT NULL"),
+            ("buyer_name", "VARCHAR(255) DEFAULT NULL")
+        ]
+        for col_name, col_type in cols:
+            cursor.execute(
+                f"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Payment' AND COLUMN_NAME='{col_name}'"
+            )
+            if cursor.fetchone()[0] == 0:
+                print(f"Adding column {col_name} to Payment table...")
+                cursor.execute(f"ALTER TABLE Payment ADD COLUMN {col_name} {col_type}")
+        connection.commit()
+    except Exception as e:
+        print(f"Error ensuring payment schema: {e}")
+    finally:
+        cursor.close()
+        connection.close()
+
+def ensure_payment_log_table():
+    """Create PaymentLog table if it doesn't exist."""
+    table_query = """
+    CREATE TABLE IF NOT EXISTS PaymentLog (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        payment_id VARCHAR(255),
+        event_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        level VARCHAR(16),
+        step VARCHAR(128),
+        message TEXT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+    execute_query(table_query, "Table 'PaymentLog' ensured to exist.")
 
 if __name__ == "__main__":
     # create_users_table()
@@ -804,16 +958,22 @@ if __name__ == "__main__":
     # create_user_course_purchase_table()
     # create_user_subscription_table()
     # ensure_user_purchase_and_subscription_details_procedure_exists()
-    # create_payment_table()
-    # create_cart_table()
-    # ensure_getCartProductsByUser_procedure_exists()
-    # create_email_master_table()    
-    # Ensure user activation support
-    #create_helpdesk_tables()
-    
+    # create_payment_table()    
+    # create_email_master_table()  
+    # create_helpdesk_tables()        
+    # create_user_activation_tokens_table()
+    # create_user_login_log_table()
+
+
     ensure_users_activation_column()
-    create_user_activation_tokens_table()
-    create_user_login_log_table()    
+    create_product_master_table()   
+    create_product_attachments_table()
+    create_cart_table()
+    ensure_getCartProductsByUser_procedure_exists() 
+    create_bundle_master_table()
+    create_bundle_mapping_table()
+    create_product_payment_table()
+    create_bundle_payment_table()
     
     # create_testimonial_table()    
     # insert_default_data()

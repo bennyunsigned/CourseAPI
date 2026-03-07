@@ -18,3 +18,4 @@ pydub
 tqdm
 ollama
 lmstudio
+razorpay
