@@ -30,10 +30,10 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "gemma3:4b"
 # ===========================================
 
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "Tosh#140695")
-DB_NAME = os.getenv("DB_NAME", "VidyaRoop")
+DB_HOST = os.getenv("DB_HOST")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
 
 # Fallback generic review texts in case Ollama is inaccessible or fails parsing
 FALLBACK_REVIEWS = [
