@@ -54,6 +54,6 @@ if __name__ == "__main__":
     install_packages(REQUIREMENTS_FILE)
 
     # Run the database creation script
-    run_db_creation_script(DB_CREATION_SCRIPT)
+    # run_db_creation_script(DB_CREATION_SCRIPT)
 
    

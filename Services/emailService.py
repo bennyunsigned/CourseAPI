@@ -244,48 +244,80 @@ def send_purchase_success_email(user_email: str, user_name: str, payment_id: str
             description = item_details.get("description", "")
             products_list = item_details.get("products_list", [])
             
-            item_info = f"<strong>Item:</strong> {item_name}"
+            item_info = f"<div style='margin-bottom: 15px;'><span style='color: #64748b; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;'>Item details</span><br/><span style='color: #0f172a; font-size: 18px; font-weight: 600;'>{item_name}</span></div>"
             if description:
-                item_info += f"<br><strong>Description:</strong> {description}"
+                item_info += f"<div style='margin-bottom: 15px; color: #475569; font-size: 15px; line-height: 1.5;'>{description}</div>"
             
             if products_list:
-                item_info += "<br><br><strong>Included Products:</strong><ul>"
+                item_info += "<div style='margin-bottom: 15px;'><span style='color: #64748b; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;'>Included Products</span><ul style='color: #334155; font-size: 15px; margin-top: 8px; padding-left: 20px; line-height: 1.6;'>"
                 for pn in products_list:
                     item_info += f"<li>{pn}</li>"
-                item_info += "</ul>"
+                item_info += "</ul></div>"
             
             # Add download links if attachments exist
             if attachments_json:
                 try:
                     atts = json.loads(attachments_json)
                     if atts:
-                        item_info += "<br><strong>Your Digital Downloads:</strong><ul style='list-style: none; padding: 0;'>"
+                        item_info += "<div style='margin-top: 25px;'><span style='color: #64748b; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;'>Your Digital Downloads</span>"
                         for a in atts:
                             url = a.get('file_url', '')
                             name = a.get('file_name') or os.path.basename(url)
                             if url.lower().startswith('/uploads/'):
                                 url = f"https://api.vidyaroop.com/{url.lstrip('/')}"
-                            item_info += f"<li style='margin-bottom: 10px; padding: 10px; background: #f0f8ff; border: 1px solid #cce5ff; border-radius: 4px;'><a href='{url}' style='color: #004085; text-decoration: none; font-weight: bold;'>⬇ {name} (Also attached to this email)</a></li>"
-                        item_info += "</ul>"
+                            item_info += f"""
+                            <div style='margin-top: 15px; padding: 20px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);'>
+                                <div style='font-weight: 600; color: #0f172a; margin-bottom: 15px; font-size: 16px;'>{name}</div>
+                                <a href='{url}' style='display: block; box-sizing: border-box; width: 100%; padding: 14px 20px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; text-align: center; font-size: 15px; background-image: linear-gradient(to right, #2563eb, #1d4ed8);'>Click here to get your purchased digital product.</a>
+                            </div>
+                            """
+                        item_info += "</div>"
                 except: pass
             
             body_template = f"""
             <html>
-              <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-                <div style="max-width:600px;margin:0 auto;padding:20px;border:1px solid #eaeaea;border-radius:8px;">
-                  <h2 style="color:#28a745; text-align: center;">Purchase Confirmation</h2>
-                  <p>Hello {{{{user_name}}}}, thank you for your purchase.</p>
-                  <div style="margin: 20px 0; padding: 15px; border: 1px solid #eee; border-radius: 4px; background-color: #fdfdfd;">
-                    <p style="margin-top: 0;"><strong>Payment ID:</strong> {{{{payment_id}}}}</p>
-                    <p><strong>Amount Paid:</strong> ₹{{{{amount}}}}</p>
-                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
-                        {item_info}
-                    </div>
-                  </div>
-                  <p>Thank you for choosing Vidyaroop!</p>
-                  <hr>
-                  <p style="font-size:12px;color:#888; text-align: center;">&copy; Vidyaroop.com</p>
-                </div>
+              <body style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 40px 10px; color: #2d3748;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f7f6; width: 100%;">
+                  <tr>
+                    <td align="center" style="padding: 0;">
+                        <table width="100%" max-width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #eaeaea;">
+                            <tr>
+                                <td style="background-color: #2563eb; background-image: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); padding: 40px 30px; text-align: center;">
+                                    <h2 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Purchase Confirmation</h2>
+                                    <p style="color: #bfdbfe; margin: 10px 0 0 0; font-size: 16px;">Thank you for your order, {{{{user_name}}}}!</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 40px 30px;">
+                                    <div style="background-color: #f8fafc; border-radius: 12px; padding: 30px; margin-bottom: 30px; border: 1px solid #e2e8f0;">
+                                        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                            <tr>
+                                                <td style="padding-bottom: 20px; border-bottom: 1px solid #e2e8f0; width: 50%;">
+                                                    <div style="color: #64748b; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 4px;">Payment ID</div>
+                                                    <div style="color: #0f172a; font-size: 16px; font-weight: 600; word-break: break-all;">{{{{payment_id}}}}</div>
+                                                </td>
+                                                <td align="right" style="padding-bottom: 20px; border-bottom: 1px solid #e2e8f0; width: 50%;">
+                                                    <div style="color: #64748b; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 4px;">Amount Paid</div>
+                                                    <div style="color: #2563eb; font-size: 22px; font-weight: 700;">₹{{{{amount}}}}</div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        <div style="margin-top: 25px;">
+                                            {item_info}
+                                        </div>
+                                    </div>
+                                    <p style="color: #475569; font-size: 16px; line-height: 1.6; text-align: center; margin: 0;">We hope you enjoy your purchase! If you have any questions or need support, feel free to reply to this email.</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="background-color: #f8fafc; padding: 25px 30px; text-align: center; border-top: 1px solid #e2e8f0;">
+                                    <p style="color: #94a3b8; font-size: 14px; margin: 0;">&copy; Vidyaroop.com. All rights reserved.</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                  </tr>
+                </table>
               </body>
             </html>
             """
@@ -311,4 +343,5 @@ def send_purchase_success_email(user_email: str, user_name: str, payment_id: str
         if final_subject: final_subject = final_subject.replace(placeholder, value)
         if final_body: final_body = final_body.replace(placeholder, value)
 
-    insert_email(user_email, final_subject, final_body, attachments_json)
+    # Do not attach files physically to prevent email account suspension due to large attachment sizes
+    insert_email(user_email, final_subject, final_body, None)
