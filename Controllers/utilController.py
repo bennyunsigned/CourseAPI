@@ -27,8 +27,9 @@ async def upload_image(file: UploadFile = File(...)):
         with open(file_location, "wb") as f:
             content = await file.read()
             f.write(content)
-        # Return the relative path for frontend use
-        return JSONResponse(content={"path": f"/{file_location}"})
+        # Return the relative path for frontend use, normalized to forward slashes
+        normalized_path = file_location.replace(os.sep, '/')
+        return JSONResponse(content={"path": f"/{normalized_path}"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
@@ -45,8 +46,9 @@ async def upload_product_image(file: UploadFile = File(...)):
         with open(file_location, "wb") as f:
             content = await file.read()
             f.write(content)
-        # Return the relative path for frontend use
-        return JSONResponse(content={"path": f"/{file_location}"})
+        # Return the relative path for frontend use, normalized to forward slashes
+        normalized_path = file_location.replace(os.sep, '/')
+        return JSONResponse(content={"path": f"/{normalized_path}"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
