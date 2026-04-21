@@ -1045,6 +1045,56 @@ def ensure_product_master_email_columns():
     finally:
         connection.close()
 
+def ensure_bundle_master_email_columns():
+    """Ensure BundleMaster table has EmailSubject and EmailBody columns."""
+    connection = get_db_connection()
+    if not connection:
+        print("Error: Could not connect to DB to ensure BundleMaster email columns")
+        return
+    try:
+        cursor = connection.cursor()
+        db_name = os.getenv("DB_NAME")
+        
+        # Check and add EmailSubject column
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'BundleMaster' AND COLUMN_NAME = 'EmailSubject'
+            """,
+            (db_name,)
+        )
+        (cnt,) = cursor.fetchone()
+        if cnt == 0:
+            cursor.execute("ALTER TABLE BundleMaster ADD COLUMN EmailSubject VARCHAR(255) DEFAULT NULL")
+            connection.commit()
+            print("Column 'BundleMaster.EmailSubject' added.")
+        else:
+            print("Column 'BundleMaster.EmailSubject' already exists.")
+        
+        # Check and add EmailBody column
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'BundleMaster' AND COLUMN_NAME = 'EmailBody'
+            """,
+            (db_name,)
+        )
+        (cnt,) = cursor.fetchone()
+        if cnt == 0:
+            cursor.execute("ALTER TABLE BundleMaster ADD COLUMN EmailBody TEXT DEFAULT NULL")
+            connection.commit()
+            print("Column 'BundleMaster.EmailBody' added.")
+        else:
+            print("Column 'BundleMaster.EmailBody' already exists.")
+        
+        cursor.close()
+    except mysql.connector.Error as err:
+        print(f"Error ensuring BundleMaster email columns: {err}")
+    finally:
+        connection.close()
+
 if __name__ == "__main__":
     # create_users_table()
     # create_category_master_table()
