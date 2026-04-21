@@ -11,13 +11,13 @@ from Utils.JWT import authenticate_request
 
 bundle_router = APIRouter()
 
-@bundle_router.post("/", response_model=BundleResponse, name="Create a Bundle")
+@bundle_router.post("", response_model=BundleResponse, name="Create a Bundle")
 def create_bundle_endpoint(
     bundle_data: BundleRequest, claims: dict = Depends(authenticate_request)
 ):
     return create_bundle(bundle_data)
 
-@bundle_router.get("/", response_model=list[BundleResponse], name="Get All Bundles")
+@bundle_router.get("", response_model=list[BundleResponse], name="Get All Bundles")
 def get_all_bundles_endpoint():
     return get_all_bundles()
 

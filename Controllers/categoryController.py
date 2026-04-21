@@ -8,12 +8,12 @@ from Utils.JWT import authenticate_request
 
 category_router = APIRouter()
 
-@category_router.post("/", response_model=CategoryResponse)
+@category_router.post("", response_model=CategoryResponse)
 def create_category_endpoint(category_data: CategoryRequest, claims: dict = Depends(authenticate_request)):
     user_id = claims["id"]
     return create_category(category_data, user_id)
 
-@category_router.get("/", response_model=list[CategoryResponse])
+@category_router.get("", response_model=list[CategoryResponse])
 def get_all_category_endpoint():
     return get_all_categories()
 

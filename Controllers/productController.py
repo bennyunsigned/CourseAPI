@@ -20,13 +20,13 @@ from Utils.JWT import authenticate_request
 
 product_router = APIRouter()
 
-@product_router.post("/", response_model=ProductResponse, name="Create a Product")
+@product_router.post("", response_model=ProductResponse, name="Create a Product")
 def create_product_endpoint(
     product_data: ProductRequest, claims: dict = Depends(authenticate_request)
 ):
     return create_product(product_data)
 
-@product_router.get("/", response_model=list[ProductResponse], name="Get All Products")
+@product_router.get("", response_model=list[ProductResponse], name="Get All Products")
 def get_all_products_endpoint():
     return get_all_products()
 

@@ -11,14 +11,14 @@ from Utils.JWT import authenticate_request
 
 course_router = APIRouter()
 
-@course_router.post("/", response_model=CourseResponse, name="Create a Course")
+@course_router.post("", response_model=CourseResponse, name="Create a Course")
 def create_course_endpoint(
     course_data: CourseRequest, claims: dict = Depends(authenticate_request)
 ):
     user_id = claims["id"]
     return create_course(course_data, user_id)
 
-@course_router.get("/", response_model=list[CourseResponse], name="Get All Courses")
+@course_router.get("", response_model=list[CourseResponse], name="Get All Courses")
 def get_all_courses_endpoint(claims: dict = Depends(authenticate_request)):
     return get_all_courses()
 

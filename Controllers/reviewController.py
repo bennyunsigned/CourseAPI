@@ -6,7 +6,7 @@ from typing import List, Optional
 
 review_router = APIRouter()
 
-@review_router.post("/", response_model=dict)
+@review_router.post("", response_model=dict)
 def create_review(review: ReviewCreate, current_user: dict = Depends(authenticate_request)):
     """
     Store a new customer review.

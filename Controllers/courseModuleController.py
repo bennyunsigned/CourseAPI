@@ -11,12 +11,12 @@ from Utils.JWT import authenticate_request
 
 course_module_router = APIRouter()
 
-@course_module_router.post("/", response_model=CourseModuleResponse)
+@course_module_router.post("", response_model=CourseModuleResponse)
 def create_module_endpoint(module_data: CourseModuleRequest, claims: dict = Depends(authenticate_request)):
     user_id = claims["id"]
     return create_module(module_data, user_id)
 
-@course_module_router.get("/", response_model=list[CourseModuleResponse])
+@course_module_router.get("", response_model=list[CourseModuleResponse])
 def get_all_modules_endpoint(course_id: int, claims: dict = Depends(authenticate_request)):
     return get_all_modules(course_id)
 
@@ -35,11 +35,11 @@ def delete_module_endpoint(module_id: int, claims: dict = Depends(authenticate_r
 
 # ---------------- Module Video Endpoints ----------------
 
-@course_module_router.post("/moduleVideo/", response_model=ModuleVideoResponse)
+@course_module_router.post("/moduleVideo", response_model=ModuleVideoResponse)
 def insert_module_video_endpoint(video_data: ModuleVideoRequest, claims: dict = Depends(authenticate_request)):
     return insert_module_video(video_data)
 
-@course_module_router.get("/moduleVideo/", response_model=list[ModuleVideoResponse])
+@course_module_router.get("/moduleVideo", response_model=list[ModuleVideoResponse])
 def get_module_videos_endpoint(course_id: int, module_id: int, claims: dict = Depends(authenticate_request)):
     return get_module_videos(course_id, module_id)
 
