@@ -133,11 +133,12 @@ if uploads_dir:
 def _start_background_jobs():
     # Ensure DB exists and schema is up to date
     create_database_if_not_exists()
-    from DB.dbCreation import ensure_payment_schema, ensure_payment_log_table, ensure_users_image_column, create_customer_reviews_table
+    from DB.dbCreation import ensure_payment_schema, ensure_payment_log_table, ensure_users_image_column, create_customer_reviews_table, ensure_product_master_email_columns
     try:
         ensure_payment_schema()
         ensure_payment_log_table()
         ensure_users_image_column()
+        ensure_product_master_email_columns()
         create_customer_reviews_table()
     except Exception as e:
         print(f"Startup schema error: {e}")

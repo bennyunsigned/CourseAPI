@@ -995,6 +995,56 @@ def create_customer_reviews_table():
     execute_query(drop_query, "Old 'CustomerReviews' dropped (if any).")
     execute_query(table_query, "Table 'CustomerReviews' ensured to exist with NULLable relations.")
 
+def ensure_product_master_email_columns():
+    """Ensure ProductMaster table has EmailSubject and EmailBody columns."""
+    connection = get_db_connection()
+    if not connection:
+        print("Error: Could not connect to DB to ensure ProductMaster email columns")
+        return
+    try:
+        cursor = connection.cursor()
+        db_name = os.getenv("DB_NAME")
+        
+        # Check and add EmailSubject column
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'ProductMaster' AND COLUMN_NAME = 'EmailSubject'
+            """,
+            (db_name,)
+        )
+        (cnt,) = cursor.fetchone()
+        if cnt == 0:
+            cursor.execute("ALTER TABLE ProductMaster ADD COLUMN EmailSubject VARCHAR(255) DEFAULT NULL")
+            connection.commit()
+            print("Column 'ProductMaster.EmailSubject' added.")
+        else:
+            print("Column 'ProductMaster.EmailSubject' already exists.")
+        
+        # Check and add EmailBody column
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'ProductMaster' AND COLUMN_NAME = 'EmailBody'
+            """,
+            (db_name,)
+        )
+        (cnt,) = cursor.fetchone()
+        if cnt == 0:
+            cursor.execute("ALTER TABLE ProductMaster ADD COLUMN EmailBody TEXT DEFAULT NULL")
+            connection.commit()
+            print("Column 'ProductMaster.EmailBody' added.")
+        else:
+            print("Column 'ProductMaster.EmailBody' already exists.")
+        
+        cursor.close()
+    except mysql.connector.Error as err:
+        print(f"Error ensuring ProductMaster email columns: {err}")
+    finally:
+        connection.close()
+
 if __name__ == "__main__":
     # create_users_table()
     # create_category_master_table()
