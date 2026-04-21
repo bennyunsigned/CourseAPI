@@ -14,10 +14,22 @@ from urllib.parse import urlparse, unquote
 
 util_router = APIRouter()
 
+# ✅ Maximum upload size in bytes (100 MB)
+MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", "104857600"))  # 100 MB default
+
 @util_router.post("/uploadCourseImage")
 async def upload_image(file: UploadFile = File(...)):
     upload_dir = "Uploads/CourseImages"
     os.makedirs(upload_dir, exist_ok=True)
+    
+    # ✅ Validate file size BEFORE reading
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size exceeds limit of {MAX_UPLOAD_SIZE / 1024 / 1024:.0f} MB"
+        )
+    
     # Generate filename in ddMMyyyyhhmmss format with original extension
     timestamp = datetime.now().strftime("%d%m%Y%H%M%S")
     ext = os.path.splitext(file.filename)[1]
@@ -25,7 +37,6 @@ async def upload_image(file: UploadFile = File(...)):
     file_location = os.path.join(upload_dir, new_filename)
     try:
         with open(file_location, "wb") as f:
-            content = await file.read()
             f.write(content)
         # Return the relative path for frontend use, normalized to forward slashes
         normalized_path = file_location.replace(os.sep, '/')
@@ -37,6 +48,15 @@ async def upload_image(file: UploadFile = File(...)):
 async def upload_product_image(file: UploadFile = File(...)):
     upload_dir = "Uploads/ProductImages"
     os.makedirs(upload_dir, exist_ok=True)
+    
+    # ✅ Validate file size BEFORE reading
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size exceeds limit of {MAX_UPLOAD_SIZE / 1024 / 1024:.0f} MB"
+        )
+    
     # Generate filename in ddMMyyyyhhmmss format with original extension
     timestamp = datetime.now().strftime("%d%m%Y%H%M%S")
     ext = os.path.splitext(file.filename)[1]
@@ -44,7 +64,6 @@ async def upload_product_image(file: UploadFile = File(...)):
     file_location = os.path.join(upload_dir, new_filename)
     try:
         with open(file_location, "wb") as f:
-            content = await file.read()
             f.write(content)
         # Return the relative path for frontend use, normalized to forward slashes
         normalized_path = file_location.replace(os.sep, '/')

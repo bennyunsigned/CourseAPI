@@ -42,6 +42,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# ✅ Configure max upload size (100 MB) - also update nginx/reverse proxy to allow this
+# FastAPI/Starlette default is 25 MB, but you need to increase both here and on nginx
+MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", "104857600"))  # 100 MB default
+
 # Protect interactive docs (Swagger UI / ReDoc / OpenAPI JSON) with HTTP Basic auth
 # when DOCS_USERNAME and DOCS_PASSWORD environment variables are set. If they are
 # not set, docs remain publicly accessible.
@@ -82,8 +86,8 @@ if os.getenv("ENV") == "Production":
 # ✅ CORS Settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=["https://vidyaroop.com", "http://localhost:4200", "http://localhost:3000"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     allow_credentials=True,
 )
