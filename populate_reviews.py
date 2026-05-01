@@ -5,7 +5,6 @@ import re
 import random
 import uuid
 import requests
-import mysql.connector
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -28,12 +27,10 @@ DUMMY_EMAIL_DOMAIN = "@dummy.vidyaroop.com" # Pattern to identify dummy users
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "gemma3:4b"
-# ===========================================
 
-DB_HOST = os.getenv("DB_HOST")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_NAME = os.getenv("DB_NAME")
+# New API settings
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000/api")
+# ===========================================
 
 # Fallback generic review texts in case Ollama is inaccessible or fails parsing
 FALLBACK_REVIEWS = [
@@ -57,14 +54,24 @@ FALLBACK_REVIEWS = [
 FIRST_NAMES = ["John", "Jane", "Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Hank", "Ivy", "Jack", "Karen", "Leo", "Mia"]
 LAST_NAMES = ["Smith", "Doe", "Johnson", "Brown", "Davis", "Miller", "Wilson", "Moore", "Taylor", "Anderson", "Thomas", "Jackson", "White"]
 
-def generate_users(count):
+def get_headers():
+    return {
+        "Content-Type": "application/json"
+    }
+
+def generate_users(count, default_password, default_phone):
     users = []
     for _ in range(count):
         fname = random.choice(FIRST_NAMES)
         lname = random.choice(LAST_NAMES)
         name = f"{fname} {lname}"
         email = f"{fname.lower()}.{lname.lower()}.{uuid.uuid4().hex[:6]}{DUMMY_EMAIL_DOMAIN}"
-        users.append({"name": name, "email": email})
+        users.append({
+            "name": name, 
+            "email": email,
+            "password": default_password,
+            "phone": default_phone
+        })
     return users
 
 def generate_item_specific_reviews(item_type, item_name, count):
@@ -118,49 +125,41 @@ def main():
     print(f"Clean Previous Reviews: {CLEAN_PREVIOUS_REVIEWS}")
     print(f"Dummy Email Domain: {DUMMY_EMAIL_DOMAIN}")
     print(f"Ollama Model: {OLLAMA_MODEL}")
+    print(f"API Base URL: {API_BASE_URL}")
     print(f"---------------------")
 
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME
-        )
-        cursor = connection.cursor(dictionary=True)
-
         aes = AESCipher()
         default_password = aes.encrypt("password123")
         default_phone = "0000000000"
 
         # Fetch existing dummy users first
-        cursor.execute("SELECT id FROM Users WHERE email LIKE %s", (f"%{DUMMY_EMAIL_DOMAIN}",))
-        dummy_users_pool = [row["id"] for row in cursor.fetchall()]
+        domain_param = DUMMY_EMAIL_DOMAIN.strip("@") # API handles the % prefix
+        # Actually API logic uses f"%{domain}", so passing the whole string including @ works
+        res = requests.get(f"{API_BASE_URL}/populate/dummy-users", params={"domain": DUMMY_EMAIL_DOMAIN}, headers=get_headers())
+        res.raise_for_status()
+        dummy_users_pool = res.json().get("userIds", [])
         existing_dummy_count = len(dummy_users_pool)
 
         if CLEAN_PREVIOUS_REVIEWS and existing_dummy_count > 0:
             print("Cleaning all previous dummy reviews...")
-            in_clause = ','.join([str(u) for u in dummy_users_pool])
-            cursor.execute(f"DELETE FROM customerreviews WHERE UserId IN ({in_clause})")
-            connection.commit()
-            print("Cleaned dummy reviews.")
+            res = requests.post(f"{API_BASE_URL}/populate/clean-reviews", json={"userIds": dummy_users_pool}, headers=get_headers())
+            res.raise_for_status()
+            print(f"Cleaned dummy reviews: {res.json().get('deleted')} deleted.")
 
         # Create new users only if we haven't reached TARGET_DUMMY_USERS_COUNT
         users_to_create = TARGET_DUMMY_USERS_COUNT - existing_dummy_count
         if users_to_create > 0:
             print(f"Target is {TARGET_DUMMY_USERS_COUNT} dummy users. {existing_dummy_count} exist. Creating {users_to_create} new dummy users...")
-            new_users = generate_users(users_to_create)
-            for u in new_users:
-                cursor.execute("""
-                    INSERT INTO Users (name, email, password, phone, provider, role, is_activated)
-                    VALUES (%s, %s, %s, %s, 'local', 'User', 1)
-                """, (u["name"], u["email"], default_password, default_phone))
-            connection.commit()
-            print(f"Inserted {users_to_create} new dummy users.")
+            new_users = generate_users(users_to_create, default_password, default_phone)
+            res = requests.post(f"{API_BASE_URL}/populate/dummy-users", json={"users": new_users}, headers=get_headers())
+            res.raise_for_status()
+            print(f"Inserted {res.json().get('inserted')} new dummy users.")
 
             # Re-fetch the updated pool
-            cursor.execute("SELECT id FROM Users WHERE email LIKE %s", (f"%{DUMMY_EMAIL_DOMAIN}",))
-            dummy_users_pool = [row["id"] for row in cursor.fetchall()]
+            res = requests.get(f"{API_BASE_URL}/populate/dummy-users", params={"domain": DUMMY_EMAIL_DOMAIN}, headers=get_headers())
+            res.raise_for_status()
+            dummy_users_pool = res.json().get("userIds", [])
         else:
             print(f"Target is {TARGET_DUMMY_USERS_COUNT} dummy users. {existing_dummy_count} already exist. No new users needed.")
 
@@ -171,14 +170,13 @@ def main():
         print(f"Total dummy users available in pool: {len(dummy_users_pool)}")
 
         # Fetch all courses, products, bundles with NAMES
-        cursor.execute("SELECT CourseId, CourseName FROM coursemaster")
-        courses = [(row["CourseId"], row["CourseName"]) for row in cursor.fetchall()]
-
-        cursor.execute("SELECT ProductID, ProductName FROM productmaster")
-        products = [(row["ProductID"], row["ProductName"]) for row in cursor.fetchall()]
-
-        cursor.execute("SELECT BundleID, BundleName FROM bundlemaster")
-        bundles = [(row["BundleID"], row["BundleName"]) for row in cursor.fetchall()]
+        res = requests.get(f"{API_BASE_URL}/populate/items", headers=get_headers())
+        res.raise_for_status()
+        items_data = res.json()
+        
+        courses = [(row["id"], row["name"]) for row in items_data.get("courses", [])]
+        products = [(row["id"], row["name"]) for row in items_data.get("products", [])]
+        bundles = [(row["id"], row["name"]) for row in items_data.get("bundles", [])]
 
         items_to_process = []
         for c, name in courses: items_to_process.append(("CourseId", c, "course", name))
@@ -197,9 +195,9 @@ def main():
         for col_name, item_id, item_type, item_name in tqdm(items_to_process, desc="Processing items", unit="item"):
             try:
                 # Query existing reviews for this item
-                query = f"SELECT UserId FROM customerreviews WHERE {col_name} = %s"
-                cursor.execute(query, (item_id,))
-                existing_user_ids = {row["UserId"] for row in cursor.fetchall()}
+                res = requests.get(f"{API_BASE_URL}/populate/item-reviewers", params={"colName": col_name, "itemId": item_id}, headers=get_headers())
+                res.raise_for_status()
+                existing_user_ids = set(res.json().get("userIds", []))
                 
                 current_count = len(existing_user_ids)
                 needed = TARGET_REVIEWS_PER_ITEM - current_count
@@ -220,21 +218,23 @@ def main():
                     while len(tailored_reviews) < to_add:
                         tailored_reviews.append(random.choice(FALLBACK_REVIEWS))
                     
+                    reviews_to_insert = []
                     for uid, r_text in zip(selected_users, tailored_reviews):
                         rating = random.randint(3, 5) # Usually 3 to 5 stars
+                        reviews_to_insert.append({
+                            "userId": uid,
+                            "colName": col_name,
+                            "itemId": item_id,
+                            "rating": rating,
+                            "reviewText": r_text
+                        })
                         
-                        insert_query = f"""
-                            INSERT INTO customerreviews 
-                            (UserId, {col_name}, Rating, ReviewText)
-                            VALUES (%s, %s, %s, %s)
-                        """
-                        cursor.execute(insert_query, (uid, item_id, rating, r_text))
-                        reviews_added_total += 1
-                        
-                    connection.commit()
+                    if reviews_to_insert:
+                        res = requests.post(f"{API_BASE_URL}/populate/reviews", json={"reviews": reviews_to_insert}, headers=get_headers())
+                        res.raise_for_status()
+                        reviews_added_total += res.json().get("inserted", 0)
             except Exception as e:
                 errors.append(f"Error at {col_name} {item_id}: {str(e)}")
-                connection.rollback()
 
         print(f"\n--- Overall Status ---")
         print(f"Data insertion complete. Added {reviews_added_total} new realistic reviews.")
@@ -247,11 +247,6 @@ def main():
         else:
             print("Successfully processed all items with zero errors.")
 
-        cursor.close()
-        connection.close()
-
-    except mysql.connector.Error as err:
-        print(f"Database Error: {err}")
     except Exception as e:
         print(f"Critical Error: {e}")
 

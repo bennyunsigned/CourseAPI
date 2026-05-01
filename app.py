@@ -33,6 +33,7 @@ from Controllers.productController import product_router
 from Controllers.bundleController import bundle_router
 from Controllers.paymentController import payment_router
 from Controllers.reviewController import review_router
+from Controllers.populateReviewsController import populate_router
 
 
 # ✅ FastAPI app
@@ -113,6 +114,7 @@ app.include_router(product_router, prefix="/api/product", tags=["Product"])
 app.include_router(bundle_router, prefix="/api/bundle", tags=["Bundle"])
 app.include_router(payment_router, prefix="/api/payment", tags=["Payment"])
 app.include_router(review_router, prefix="/api/reviews", tags=["Reviews"])
+app.include_router(populate_router, prefix="/api/populate", tags=["Populate"])
 
 # Serve uploaded files from the `Uploads` directory at the `/uploads` URL path.
 # Use an absolute path to the folder so mounting works regardless of CWD.
