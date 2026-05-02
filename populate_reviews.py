@@ -20,8 +20,8 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from Utils.AES import AESCipher
 
 # ================= OPTIONS =================
-TARGET_DUMMY_USERS_COUNT = 50   # Ensure exactly this many dummy users exist in the database
-TARGET_REVIEWS_PER_ITEM = 20    # The target number of reviews each course/product/bundle should have
+TARGET_DUMMY_USERS_COUNT = 200   # Ensure exactly this many dummy users exist in the database
+TARGET_REVIEWS_PER_ITEM = 50    # The target number of reviews each course/product/bundle should have
 CLEAN_PREVIOUS_REVIEWS = True  # If True, deletes all existing DUMMY reviews before inserting new ones
 DUMMY_EMAIL_DOMAIN = "@dummy.vidyaroop.com" # Pattern to identify dummy users
 
@@ -29,7 +29,7 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "gemma3:4b"
 
 # New API settings
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000/api")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.vidyaroop.com/api")
 # ===========================================
 
 # Fallback generic review texts in case Ollama is inaccessible or fails parsing
@@ -51,9 +51,31 @@ FALLBACK_REVIEWS = [
     "I had some issues at first but it grew on me."
 ]
 
-FIRST_NAMES = ["John", "Jane", "Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Hank", "Ivy", "Jack", "Karen", "Leo", "Mia"]
-LAST_NAMES = ["Smith", "Doe", "Johnson", "Brown", "Davis", "Miller", "Wilson", "Moore", "Taylor", "Anderson", "Thomas", "Jackson", "White"]
+FIRST_NAMES = [
+"Aarav","Vivaan","Aditya","Vihaan","Arjun","Sai","Reyansh","Ayaan","Krishna","Ishaan",
+"Shaurya","Atharv","Dhruv","Kabir","Rohan","Kunal","Manav","Aryan","Yash","Dev",
+"Ananya","Diya","Saanvi","Aadhya","Kavya","Pari","Anika","Navya","Riya","Ira",
+"Myra","Sara","Ishita","Meera","Pooja","Sneha","Nisha","Tanya","Neha","Priya",
+"Rahul","Amit","Vikram","Suresh","Rakesh","Deepak","Anil","Sunil","Ajay","Nitin",
+"Harsh","Varun","Tarun","Gaurav","Mohit","Naveen","Siddharth","Raj","Karan","Arnav",
+"Lakshmi","Shreya","Aarti","Bhavna","Chandni","Divya","Esha","Falguni","Gauri","Hema",
+"Indira","Jaya","Kiran","Lata","Madhuri","Nandini","Ojasvi","Pallavi","Rashmi","Shivani",
+"Tanvi","Usha","Vaishali","Yamini","Zoya","Alok","Bhavesh","Chirag","Dinesh","Eknath",
+"Farhan","Girish","Hemant","Imran","Jitendra","Kishore","Lokesh","Mahesh","Naresh","Omkar"
+]
 
+LAST_NAMES = [
+"Sharma","Verma","Gupta","Agarwal","Mehta","Jain","Bansal","Mittal","Chopra","Kapoor",
+"Khanna","Malhotra","Arora","Saxena","Tripathi","Tiwari","Pandey","Dubey","Pathak","Mishra",
+"Yadav","Singh","Chauhan","Thakur","Rathore","Rajput","Solanki","Patel","Desai","Joshi",
+"Shetty","Naidu","Reddy","Nair","Menon","Iyer","Pillai","Das","Dutta","Bose",
+"Banerjee","Chatterjee","Mukherjee","Ghosh","Sengupta","Roy","Pal","Saha","Kundu","Biswas",
+"Naik","Sawant","Shinde","Jadhav","Pawar","Gaikwad","More","Kadam","Patil","Kulkarni",
+"Deshmukh","Chavan","Salunkhe","Rao","Murthy","Krishnan","Subramanian","Venkatesh","Balakrishnan","Narayanan",
+"Fernandes","D'Souza","Pereira","Rodrigues","Gomes","Dias","Costa","Silva","Kaur","Gill",
+"Sidhu","Sandhu","Brar","Bedi","Grewal","Chawla","Ahuja","Luthra","Suri","Talwar",
+"Bhardwaj","Chandel","Rawat","Negi","Bisht","Pandit","Kaul","Razdan","Bhat","Mirza"
+]
 def get_headers():
     return {
         "Content-Type": "application/json"
