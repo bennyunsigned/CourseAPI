@@ -34,6 +34,7 @@ from Controllers.bundleController import bundle_router
 from Controllers.paymentController import payment_router
 from Controllers.reviewController import review_router
 from Controllers.populateReviewsController import populate_router
+from Controllers.tradingController import trading_router
 
 
 # ✅ FastAPI app
@@ -88,6 +89,7 @@ if os.getenv("ENV") == "Production":
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://vidyaroop.com", "http://localhost:4200", "http://localhost:3000"],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1):.*",
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     allow_credentials=True,
@@ -115,6 +117,7 @@ app.include_router(bundle_router, prefix="/api/bundle", tags=["Bundle"])
 app.include_router(payment_router, prefix="/api/payment", tags=["Payment"])
 app.include_router(review_router, prefix="/api/reviews", tags=["Reviews"])
 app.include_router(populate_router, prefix="/api/populate", tags=["Populate"])
+app.include_router(trading_router, prefix="/api/trading", tags=["Trading"])
 
 # Serve uploaded files from the `Uploads` directory at the `/uploads` URL path.
 # Use an absolute path to the folder so mounting works regardless of CWD.
